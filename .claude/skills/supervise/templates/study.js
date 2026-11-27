@@ -229,7 +229,7 @@
   }
 
   function renderNotes(items, marker) {
-    const list = el('div', 'eq-notes');
+    const list = el('div', 'eq-notes eq-edge-notes');
     items.forEach((item) => {
       const note = el('article', 'eq-note');
       const body = el('div');
@@ -242,7 +242,7 @@
   }
 
   function renderTests(items) {
-    const list = el('div', 'eq-notes eq-tests');
+    const list = el('div', 'eq-notes eq-test-notes');
     items.forEach((item) => {
       const note = el('article', 'eq-note');
       const body = el('div');

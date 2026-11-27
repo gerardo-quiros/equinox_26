@@ -32,23 +32,11 @@
 <!--@study-->
 
 <main class="stage" id="stage" hidden>
-  <a class="eq-home-link" href="#inicio">← Inicio</a>
-
-  <!-- Cabecera: marca, título y progreso de la misión -->
-  <header class="top">
-    <img class="logo" src="asset:logo-300.webp" alt="Supervise">
-
-    <section class="panel rivets title">
-      <h1>Mapa de misiones: niveles por conquistar</h1>
-      <p>Guía a tu héroe por los senderos del código, descubre lo que merece tu atención y conquista cada nivel.</p>
-    </section>
-
-    <!-- Progreso de la misión: esquina superior derecha, en escritorio -->
-    <section class="panel rivets mission" aria-label="Progreso de la misión">
-      <p class="mission-name">Misión: <span id="mission-name"></span></p>
-      <div class="bar" id="bar" role="progressbar" aria-label="Niveles conquistados" aria-valuemin="0" aria-valuemax="3" aria-valuenow="0"><i id="bar-fill"></i></div>
-      <p class="bar-text" id="bar-text"></p>
-    </section>
+  <!-- Cabecera común de La Senda -->
+  <header class="eq-hero eq-hero-sm challenge-hero">
+    <p class="eq-eyebrow">Segunda etapa del viaje</p>
+    <h1>El desafío del Maestro</h1>
+    <p class="eq-subtitle">Demuestra lo aprendido y conquista cada nivel.</p>
   </header>
 
   <!-- Mensaje final: solo cuando se han conquistado los tres niveles -->
@@ -107,6 +95,15 @@
       </span>
     </button>
   </nav>
+
+  <!-- Progreso de la misión: debajo de las tarjetas -->
+  <section class="panel rivets mission" aria-label="Progreso de la misión">
+    <p class="mission-name">Misión: <span id="mission-name"></span></p>
+    <div class="bar" id="bar" role="progressbar" aria-label="Niveles conquistados" aria-valuemin="0" aria-valuemax="3" aria-valuenow="0"><i id="bar-fill"></i></div>
+    <p class="bar-text" id="bar-text"></p>
+  </section>
+
+  <a class="eq-home-link challenge-home-link" href="#inicio">← Inicio</a>
 </main>
 
 <!-- Modal: solo la tarjeta del nivel. Su contenido sale de las plantillas de abajo. -->

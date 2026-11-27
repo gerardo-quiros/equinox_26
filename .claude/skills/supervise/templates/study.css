@@ -21,9 +21,13 @@
 }
 
 /* El fondo verde solo en las vistas de Equinox; el desafío conserva el suyo. */
-body[data-view="inicio"], body[data-view="aprendiz"] {
-  background: #2c4a33 url("asset:study/background.webp") center / cover fixed no-repeat;
+body[data-view="inicio"], body[data-view="aprendiz"], body[data-view="desafio"] {
+  background: linear-gradient(180deg, rgba(31, 73, 43, .12), rgba(22, 57, 36, .62)), url("asset:study/background.webp") center / cover fixed no-repeat;
 }
+
+.stage { background: transparent; }
+.stage .mission { align-self: center; width: min(360px, 100%); max-width: none; }
+.stage .challenge-home-link { align-self: center; }
 
 .eq-view {
   position: relative; min-height: 100vh; padding: clamp(24px, 4vw, 60px) clamp(16px, 5vw, 96px) 32px;
@@ -57,6 +61,9 @@ body[data-view="inicio"], body[data-view="aprendiz"] {
 .eq-card.eq-disabled { cursor: not-allowed; filter: grayscale(.8); opacity: .7; }
 .eq-card.eq-disabled:hover { transform: none; }
 
+.challenge-hero { margin-top: 22px; }
+.challenge-home-link { margin-top: 22px; }
+
 .eq-footer { margin: 2.2rem 0 0; font: .72rem var(--rpg); letter-spacing: .1em; text-align: center; color: #ffe9b9; }
 .eq-footer span { padding: 0 .55rem; color: var(--eq-gold-light); }
 
@@ -77,6 +84,10 @@ body[data-view="inicio"], body[data-view="aprendiz"] {
 .eq-close { position: absolute; top: .4rem; right: .7rem; z-index: 2; color: var(--eq-forest); background: none; border: 0; font-size: 1.8rem; line-height: 1; cursor: pointer; }
 .eq-btn { margin-top: 1.5rem; padding: .7rem 1.2rem; font: 600 .9rem var(--body); color: var(--eq-paper); cursor: pointer; background: var(--eq-forest); border: 2px solid var(--eq-forest); border-radius: 7px; }
 .eq-btn:hover { background: var(--eq-forest-light); }
+.eq-btn:not(.eq-btn-ghost) { background: linear-gradient(#2563EB, #1E40AF); border-color: #60A5FA; }
+.eq-btn:not(.eq-btn-ghost):hover { background: #1D4ED8; }
+.eq-btn-ghost { border-color: #2563EB; }
+:focus-visible { outline-color: #2563EB; }
 .eq-btn-ghost { color: var(--eq-forest); background: transparent; }
 .eq-btn-ghost:hover { color: var(--eq-paper); }
 .eq-justify { text-align: justify; }
@@ -96,7 +107,7 @@ body[data-view="inicio"], body[data-view="aprendiz"] {
 .eq-map-option { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: .65rem; padding: .7rem .9rem; text-align: left; color: var(--eq-ink); cursor: pointer; border: 2px solid rgba(49, 90, 54, .28); border-radius: 12px; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .38), 0 3px 0 rgba(49, 90, 54, .18); transition: transform .2s ease, filter .2s ease; }
 .eq-opt-flow { background: var(--eq-flow-bg); } .eq-opt-components { background: var(--eq-components-bg); } .eq-opt-models { background: var(--eq-models-bg); }
 .eq-opt-decisions { background: var(--eq-decisions-bg); } .eq-opt-edgeCases { background: var(--eq-edge-bg); } .eq-opt-tests { background: var(--eq-tests-bg); }
-.eq-map-option:hover, .eq-map-option.is-selected { transform: translateX(4px); filter: brightness(.96) saturate(1.12); box-shadow: 0 0 0 3px rgba(49, 90, 54, .2), 0 3px 0 rgba(49, 90, 54, .22); }
+.eq-map-option:hover, .eq-map-option.is-selected { transform: translateX(4px); filter: brightness(.96) saturate(1.12); box-shadow: 0 0 0 3px rgba(37, 99, 235, .32), 0 3px 0 rgba(49, 90, 54, .22); }
 .eq-map-icon { display: grid; place-items: center; width: 2.1rem; height: 2.1rem; color: var(--eq-forest); background: rgba(255, 255, 255, .35); border: 2px solid rgba(49, 90, 54, .45); border-radius: 50%; }
 .eq-map-icon svg { width: 1.2rem; height: 1.2rem; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.7; }
 .eq-map-copy { display: flex; flex-direction: column; gap: .15rem; }
@@ -144,7 +155,11 @@ body[data-view="inicio"], body[data-view="aprendiz"] {
 .eq-note h3 { margin-top: 0; }
 .eq-note > div { flex: 1; min-width: 0; }
 .eq-note-marker { flex: none; width: 1.2rem; font-weight: 800; text-align: center; color: var(--eq-gold); }
-.eq-tests .eq-note { border-left-color: #879db0; }
+.eq-note-marker { color: #B69A52; }
+.eq-test-notes .eq-note-marker { color: #0F766E; }
+.eq-edge-notes .eq-note .eq-note-marker { color: #B4432E; }
+.eq-tests .eq-note { border-left-color: #0F766E; }
+.eq-edge-notes .eq-note { border-left-color: #B4432E; }
 .eq-cases { margin-left: .5rem; padding: 1px 7px; font: 600 .76rem var(--body); vertical-align: 2px; color: var(--eq-forest); background: var(--eq-sage-light); border-radius: 99px; }
 
 /* Referencia al código */
@@ -175,7 +190,7 @@ body[data-view="inicio"], body[data-view="aprendiz"] {
 /* ============ Pantallas pequeñas ============ */
 
 @media (max-width: 760px) {
-  body[data-view="inicio"], body[data-view="aprendiz"] { background-attachment: scroll; }
+  body[data-view="inicio"], body[data-view="aprendiz"], body[data-view="desafio"] { background-attachment: scroll; }
   .eq-cards { gap: .7rem; }
   .eq-cards-2 .eq-card { width: calc(50% - .35rem); }
   .eq-cards-3 { flex-direction: column; align-items: center; }

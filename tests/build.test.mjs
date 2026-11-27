@@ -29,7 +29,7 @@ test('el HTML es autocontenido: sin recursos externos', () => {
 test('incrusta fuentes e imágenes y pesa menos de 1 MB', () => {
   const html = buildHtml(example);
   assert.match(html, /data:font\/woff2;base64,/);
-  assert.match(html, /data:image\/jpeg;base64,/);
+  assert.match(html, /data:image\/webp;base64,/);
   assert.ok(Buffer.byteLength(html) < 1024 * 1024, `pesa ${Buffer.byteLength(html)} bytes`);
 });
 
