@@ -34,6 +34,7 @@ const text = (el) => el.textContent.replace(/\s+/g, ' ').trim();
 
 (async () => {
   try {
+    check('desafío: vista visible con #desafio', !$('#stage').hidden && $('#eq-landing').hidden);
     check('mapa: tres niveles por explorar', $$('.level').length === 3 && $$('.level').every((l) => l.dataset.state === 'pending'));
     check('mapa: progreso inicial', text($('#bar-text')).startsWith('0 de 3'));
     check('mapa: misión', text($('#mission-name')) === 'Valle de la Autenticación');
@@ -169,7 +170,8 @@ test('recorrido completo en Chrome: flashcards, test, escenarios y final', { ski
   const page = join(dir, 'review.html');
   writeFileSync(page, buildHtml(example).replace('</body>', () => `<script>${DRIVER}</script>\n</body>`));
 
-  const run = spawnSync(CHROME, ['--headless=new', '--disable-gpu', '--no-sandbox', '--virtual-time-budget=8000', '--dump-dom', `file://${page}`], { encoding: 'utf8', timeout: 90000 });
+  // El HTML abre en el inicio de Equinox; el mapa de misiones es la vista #desafio.
+  const run = spawnSync(CHROME, ['--headless=new', '--disable-gpu', '--no-sandbox', '--virtual-time-budget=8000', '--dump-dom', `file://${page}#desafio`], { encoding: 'utf8', timeout: 90000 });
   const match = run.stdout.match(/<pre id="e2e-out">([\s\S]*?)<\/pre>/);
   assert.ok(match, `el guion no terminó. stderr: ${run.stderr.slice(-400)}`);
   const unescape = (s) => s.replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');

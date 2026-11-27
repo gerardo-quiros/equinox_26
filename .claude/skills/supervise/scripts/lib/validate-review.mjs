@@ -62,7 +62,62 @@ export function validateReview(review, schema) {
     }
   });
 
+  // 6. Fase de estudio (opcional).
+  if (review.study) checkStudy(review.study, focusIds, err, warn);
+  if (review.study && review.schemaVersion === '1.0') err('schemaVersion', 'el bloque study necesita schemaVersion "1.1"');
+
   return { valid: errors.length === 0, errors, warnings };
+}
+
+const MAX_STUDY_SNIPPET_LINES = 12;
+
+/** Recorre todas las referencias a código del bloque study: [ruta, ref]. */
+export function studyRefs(study) {
+  const out = [];
+  const add = (path, item) => { if (item.ref) out.push([`${path}.ref`, item.ref]); };
+  const { map } = study;
+  for (const group of ['flow', 'components', 'models', 'decisions', 'edgeCases', 'tests']) {
+    map[group].forEach((item, i) => add(`study.map.${group}[${i}]`, item));
+  }
+  study.teachings.forEach((item, i) => add(`study.teachings[${i}]`, item));
+  return out;
+}
+
+function checkStudy(study, focusIds, err, warn) {
+  const { map } = study;
+
+  for (const group of ['components', 'models']) {
+    const seen = new Set();
+    map[group].forEach((item, i) => {
+      if (seen.has(item.name)) err(`study.map.${group}[${i}].name`, `«${item.name}» está repetido`);
+      seen.add(item.name);
+    });
+  }
+
+  const withFocus = [
+    ...map.decisions.map((x, i) => [`study.map.decisions[${i}]`, x]),
+    ...map.edgeCases.map((x, i) => [`study.map.edgeCases[${i}]`, x]),
+    ...study.teachings.map((x, i) => [`study.teachings[${i}]`, x]),
+  ];
+  for (const [path, item] of withFocus) {
+    (item.focusIds ?? []).forEach((id, j) => {
+      if (!focusIds.has(id)) err(`${path}.focusIds[${j}]`, `el foco "${id}" no existe en focuses`);
+    });
+  }
+
+  for (const [path, ref] of studyRefs(study)) {
+    if (ref.lines && ref.lines.end < ref.lines.start) {
+      err(`${path}.lines`, `end (${ref.lines.end}) no puede ser menor que start (${ref.lines.start})`);
+    }
+    if (ref.snippet) {
+      const count = ref.snippet.replace(/\n+$/, '').split('\n').length;
+      if (count > MAX_STUDY_SNIPPET_LINES) err(`${path}.snippet`, `máximo ${MAX_STUDY_SNIPPET_LINES} líneas en el estudio (tiene ${count}); si hace falta más, no pongas código`);
+    }
+  }
+
+  if (!map.decisions.length && !map.edgeCases.length) {
+    warn('study.map', 'sin decisiones ni casos límite: el mapa se queda corto');
+  }
 }
 
 function checkQuizItem(q, path, err) {

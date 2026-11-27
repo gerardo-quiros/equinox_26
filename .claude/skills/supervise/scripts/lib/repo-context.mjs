@@ -139,6 +139,18 @@ function projectName(root) {
   return basename(root);
 }
 
+/* ============ remoto (para enlazar el código en GitHub) ============ */
+
+/** Convierte la URL del remoto en la URL web de GitHub, o null si no es GitHub. Quita credenciales. */
+export function githubWebUrl(remote) {
+  if (!remote) return null;
+  const match = remote.trim().match(/^(?:git@github\.com:|ssh:\/\/git@github\.com\/|https:\/\/(?:[^@/]+@)?github\.com\/)([A-Za-z0-9._-]+)\/([A-Za-z0-9._-]+?)(?:\.git)?\/?$/);
+  return match ? `https://github.com/${match[1]}/${match[2]}` : null;
+}
+
+// El commit está publicado si alguna rama remota lo contiene: solo entonces los enlaces funcionan.
+const isPublished = (root, sha) => Boolean(tryGit(root, ['branch', '-r', '--contains', sha]));
+
 /* ============ punto de entrada ============ */
 
 export const slug = (text) => text.replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60) || 'revision';
@@ -216,6 +228,8 @@ export function collectContext({ cwd = process.cwd(), base: explicitBase = null,
   if (!specs.length) warnings.push('No hay especificaciones: la revisión se basa en el diff y en las convenciones del proyecto.');
 
   const reviewId = `${slug(headName)}-${head.slice(0, 7)}${dirty ? '-dirty' : ''}-${stampOf(now)}`;
+  const repoUrl = githubWebUrl(tryGit(root, ['remote', 'get-url', 'origin']));
+  const published = repoUrl ? isPublished(root, head) : false;
 
   return {
     reviewId,
@@ -226,6 +240,8 @@ export function collectContext({ cwd = process.cwd(), base: explicitBase = null,
     base,
     mergeBase,
     dirty,
+    repoUrl,
+    published,
     lastCommitSubject: tryGit(root, ['log', '-1', '--format=%s']),
     commits,
     stats,
@@ -258,6 +274,7 @@ export function contextSummary(ctx) {
         mergeBase: ctx.mergeBase,
         commit: ctx.head.sha,
         dirty: ctx.dirty,
+        ...(ctx.repoUrl ? { repoUrl: ctx.repoUrl, published: ctx.published } : {}),
       },
       stats: ctx.stats,
     },

@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title><!--@title--></title>
 <style><!--@styles--></style>
+<style><!--@study-styles--></style>
 </head>
 <body>
 
@@ -27,7 +28,11 @@
   <symbol id="i-scroll" viewBox="0 0 24 24"><path d="M6 4h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zM8 9h8M8 13h8M8 17h5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
 </svg>
 
-<main class="stage" id="stage">
+<!-- Equinox: inicio y fase de estudio (templates/study.html). El mapa de misiones es «El desafío del Maestro». -->
+<!--@study-->
+
+<main class="stage" id="stage" hidden>
+  <a class="eq-home-link" href="#inicio">← Inicio</a>
 
   <!-- Cabecera: marca, título y progreso de la misión -->
   <header class="top">
@@ -110,5 +115,6 @@
 
 <script type="application/json" id="review-data"><!--@data--></script>
 <script><!--@script--></script>
+<script><!--@study-script--></script>
 </body>
 </html>

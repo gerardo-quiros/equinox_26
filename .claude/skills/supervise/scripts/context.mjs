@@ -57,6 +57,7 @@ line('cambios', `${ctx.stats.filesChanged} archivo(s) · +${ctx.stats.additions}
 line('commits', ctx.commits.length ? `${ctx.commits.length}: ${ctx.commits.slice(0, 3).map((c) => c.subject).join(' · ')}${ctx.commits.length > 3 ? ' …' : ''}` : 'ninguno (solo cambios sin commitear)');
 line('especificaciones', ctx.specs.length ? ctx.specs.map((s) => s.dir).join(', ') : 'ninguna');
 if (ctx.excluded.length) line('excluidos', ctx.excluded.join(', '));
+line('github', ctx.repoUrl ? `${ctx.repoUrl}${ctx.published ? '' : ' · commit sin publicar: los enlaces no funcionarán todavía'}` : 'sin remoto de GitHub: no habrá enlaces al código');
 for (const w of ctx.warnings) console.log(`  ⚠ ${w}`);
 line('carpeta', outDir);
 if (!ignored) console.log('  ⚠ .hitl/ no está en .gitignore: conviene añadirlo para no versionar las revisiones.');

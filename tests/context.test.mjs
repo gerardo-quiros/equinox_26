@@ -6,7 +6,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { collectContext, contextSummary, splitPatch, isExcluded, slug, stampOf } from '../.claude/skills/supervise/scripts/lib/repo-context.mjs';
+import { collectContext, contextSummary, splitPatch, isExcluded, slug, stampOf, githubWebUrl } from '../.claude/skills/supervise/scripts/lib/repo-context.mjs';
 
 const REVIEW_ID = /^[A-Za-z0-9._-]{1,120}$/;
 
@@ -137,6 +137,41 @@ test('context.json no contiene el parche (va en changes.patch) y trae el metadat
   assert.equal(summary.metaDraft.source.commit, ctx.head.sha);
   assert.equal(summary.metaDraft.title, 'feat: login');
   assert.match(summary.metaDraft.summary, /pendiente/);
+});
+
+test('sin remoto no hay repoUrl ni enlaces', () => {
+  const ctx = collectContext({ cwd: fixtureRepo() });
+  assert.equal(ctx.repoUrl, null);
+  assert.equal(ctx.published, false);
+  assert.equal('repoUrl' in contextSummary(ctx).metaDraft.source, false, 'metaDraft no lleva campos vacíos');
+});
+
+test('con remoto de GitHub: repoUrl y si el commit está publicado', () => {
+  const root = fixtureRepo({ dirty: false });
+  git(root, 'remote', 'add', 'origin', 'git@github.com:acme/acme-portal.git');
+  let ctx = collectContext({ cwd: root });
+  assert.equal(ctx.repoUrl, 'https://github.com/acme/acme-portal');
+  assert.equal(ctx.published, false, 'ninguna rama remota contiene el commit');
+
+  // Simula un push: una rama remota que contiene HEAD.
+  git(root, 'update-ref', 'refs/remotes/origin/feature/001-auth', 'HEAD');
+  ctx = collectContext({ cwd: root });
+  assert.equal(ctx.published, true);
+  assert.deepEqual(
+    { repoUrl: contextSummary(ctx).metaDraft.source.repoUrl, published: contextSummary(ctx).metaDraft.source.published },
+    { repoUrl: 'https://github.com/acme/acme-portal', published: true },
+  );
+});
+
+test('githubWebUrl normaliza SSH y HTTPS, quita credenciales y rechaza otros hosts', () => {
+  const expected = 'https://github.com/acme/portal';
+  for (const url of ['git@github.com:acme/portal.git', 'ssh://git@github.com/acme/portal.git', 'https://github.com/acme/portal.git',
+    'https://github.com/acme/portal', 'https://token:x-oauth@github.com/acme/portal.git', 'https://github.com/acme/portal/']) {
+    assert.equal(githubWebUrl(url), expected, url);
+  }
+  for (const url of ['git@gitlab.com:acme/portal.git', 'https://bitbucket.org/acme/portal', 'https://github.com/acme', null, '']) {
+    assert.equal(githubWebUrl(url), null, String(url));
+  }
 });
 
 /* ---- Funciones auxiliares ---- */
