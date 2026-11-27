@@ -31,13 +31,14 @@
 
   <!-- Cabecera: marca, título y progreso de la misión -->
   <header class="top">
-    <div class="banner" aria-hidden="true"><span class="star">★</span>SUPERVISE</div>
+    <img class="logo" src="asset:logo-300.png" alt="Supervise">
 
     <section class="panel rivets title">
       <h1>Mapa de misiones: niveles por conquistar</h1>
       <p>Guía a tu héroe por los senderos del código, descubre lo que merece tu atención y conquista cada nivel.</p>
     </section>
 
+    <!-- Progreso de la misión: esquina superior derecha, en escritorio -->
     <section class="panel rivets mission" aria-label="Progreso de la misión">
       <p class="mission-name">Misión: <span id="mission-name"></span></p>
       <div class="bar" id="bar" role="progressbar" aria-label="Niveles conquistados" aria-valuemin="0" aria-valuemax="3" aria-valuenow="0"><i id="bar-fill"></i></div>
@@ -72,27 +73,33 @@
       <span class="lvl-ribbon">En encuentro</span>
       <span class="lvl-top"><span>Nivel 01</span><span class="lvl-chip">✓ Conquistado</span></span>
       <span class="lvl-icon"><svg><use href="#i-cards"/></svg></span>
-      <span class="lvl-sub">Iniciación</span>
-      <strong class="lvl-title">Flashcards</strong>
-      <span class="lvl-count"></span>
+      <span class="lvl-strip">
+        <span class="lvl-sub">Iniciación</span>
+        <strong class="lvl-title">Flashcards</strong>
+        <span class="lvl-count"></span>
+      </span>
     </button>
 
     <button type="button" class="level" data-level="quiz">
       <span class="lvl-ribbon">En encuentro</span>
       <span class="lvl-top"><span>Nivel 02</span><span class="lvl-chip">✓ Conquistado</span></span>
       <span class="lvl-icon"><svg><use href="#i-quiz"/></svg></span>
-      <span class="lvl-sub">Intermedio</span>
-      <strong class="lvl-title">Test con opciones</strong>
-      <span class="lvl-count"></span>
+      <span class="lvl-strip">
+        <span class="lvl-sub">Intermedio</span>
+        <strong class="lvl-title">Test con opciones</strong>
+        <span class="lvl-count"></span>
+      </span>
     </button>
 
     <button type="button" class="level" data-level="scenarios">
       <span class="lvl-ribbon">En encuentro</span>
       <span class="lvl-top"><span>Nivel 03</span><span class="lvl-chip">✓ Conquistado</span></span>
       <span class="lvl-icon"><svg><use href="#i-scroll"/></svg></span>
-      <span class="lvl-sub">Final</span>
-      <strong class="lvl-title">Escenarios</strong>
-      <span class="lvl-count"></span>
+      <span class="lvl-strip">
+        <span class="lvl-sub">Final</span>
+        <strong class="lvl-title">Escenarios</strong>
+        <span class="lvl-count"></span>
+      </span>
     </button>
   </nav>
 </main>
