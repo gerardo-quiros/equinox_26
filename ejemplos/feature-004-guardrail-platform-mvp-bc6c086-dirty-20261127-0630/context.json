@@ -1,0 +1,339 @@
+{
+  "reviewId": "feature-004-guardrail-platform-mvp-bc6c086-dirty-20261127-0630",
+  "generatedAt": "2026-11-27T05:30:41.073Z",
+  "root": "/Users/id05402/Projects/litellm-gateway",
+  "project": "litellm-gateway",
+  "head": {
+    "name": "feature/004-guardrail-platform-mvp",
+    "sha": "bc6c086cd006e51487fced6eb3c61058c262439c"
+  },
+  "base": {
+    "name": "main",
+    "ref": "origin/main",
+    "source": "origin/HEAD"
+  },
+  "mergeBase": "b141d1daa16f1b9143b33f647d9a9502411628b7",
+  "dirty": true,
+  "repoUrl": "https://github.com/gerardo-quiros/litellm-gateway",
+  "published": true,
+  "lastCommitSubject": "feat: tunnel port in platform",
+  "commits": [
+    {
+      "sha": "bc6c086",
+      "subject": "feat: tunnel port in platform"
+    },
+    {
+      "sha": "112e6aa",
+      "subject": "feat: add general_settings vars"
+    },
+    {
+      "sha": "d4d26dd",
+      "subject": "fix: return modified messages"
+    },
+    {
+      "sha": "0fd253f",
+      "subject": "feat: handle logging"
+    },
+    {
+      "sha": "23eb8df",
+      "subject": "Add guardrail platform MVP (feature 004)"
+    }
+  ],
+  "stats": {
+    "filesChanged": 38,
+    "additions": 34057,
+    "deletions": 109
+  },
+  "files": [
+    {
+      "path": ".hitl/reviews/feature-004-guardrail-platform-mvp-bc6c086-dirty-20261127-0629/changes.patch",
+      "status": "added",
+      "additions": 14666,
+      "deletions": 0
+    },
+    {
+      "path": ".hitl/reviews/feature-004-guardrail-platform-mvp-bc6c086-dirty-20261127-0601/changes.patch",
+      "status": "added",
+      "additions": 10630,
+      "deletions": 0
+    },
+    {
+      "path": ".hitl/reviews/feature-004-guardrail-platform-mvp-bc6c086-dirty-20261127-0601/review.html",
+      "status": "added",
+      "additions": 1659,
+      "deletions": 0
+    },
+    {
+      "path": ".hitl/reviews/feature-004-guardrail-platform-mvp-bc6c086-dirty-20261127-0601/review.json",
+      "status": "added",
+      "additions": 1085,
+      "deletions": 0
+    },
+    {
+      "path": "scripts/check-platform.sh",
+      "status": "added",
+      "additions": 732,
+      "deletions": 0
+    },
+    {
+      "path": "scripts/check.sh",
+      "status": "added",
+      "additions": 666,
+      "deletions": 0
+    },
+    {
+      "path": ".hitl/reviews/feature-004-guardrail-platform-mvp-bc6c086-dirty-20261127-0629/context.json",
+      "status": "added",
+      "additions": 597,
+      "deletions": 0
+    },
+    {
+      "path": ".hitl/reviews/feature-004-guardrail-platform-mvp-bc6c086-dirty-20261127-0601/context.json",
+      "status": "added",
+      "additions": 567,
+      "deletions": 0
+    },
+    {
+      "path": "docs/guardrails-platform-comparison.es.md",
+      "status": "added",
+      "additions": 511,
+      "deletions": 0
+    },
+    {
+      "path": "docs/guardrails-platform-comparison.md",
+      "status": "added",
+      "additions": 509,
+      "deletions": 0
+    },
+    {
+      "path": "docs/gru-assessment.es.md",
+      "status": "added",
+      "additions": 296,
+      "deletions": 0
+    },
+    {
+      "path": "docs/gru-assessment.md",
+      "status": "added",
+      "additions": 294,
+      "deletions": 0
+    },
+    {
+      "path": "scripts/check-persistence.sh",
+      "status": "added",
+      "additions": 263,
+      "deletions": 0
+    },
+    {
+      "path": "README.md",
+      "status": "added",
+      "additions": 260,
+      "deletions": 0
+    },
+    {
+      "path": "scripts/validate-client.sh",
+      "status": "added",
+      "additions": 256,
+      "deletions": 0
+    },
+    {
+      "path": ".hitl/reviews/feature-004-guardrail-platform-mvp-bc6c086-dirty-20261127-0601/gen.py",
+      "status": "added",
+      "additions": 170,
+      "deletions": 0
+    },
+    {
+      "path": "docs/roadmap.md",
+      "status": "added",
+      "additions": 168,
+      "deletions": 0
+    },
+    {
+      "path": "platform/guardrail_platform/definitions.py",
+      "status": "added",
+      "additions": 136,
+      "deletions": 0
+    },
+    {
+      "path": "config.yaml",
+      "status": "modified",
+      "additions": 18,
+      "deletions": 107
+    },
+    {
+      "path": "gateway/platform_adapter.py",
+      "status": "added",
+      "additions": 112,
+      "deletions": 0
+    },
+    {
+      "path": "platform/guardrail_platform/main.py",
+      "status": "added",
+      "additions": 75,
+      "deletions": 0
+    },
+    {
+      "path": "platform/guardrail_platform/pipeline.py",
+      "status": "added",
+      "additions": 68,
+      "deletions": 0
+    },
+    {
+      "path": "platform/guardrail_platform/engines/injection_heuristic.py",
+      "status": "added",
+      "additions": 65,
+      "deletions": 0
+    },
+    {
+      "path": "platform/guardrail_platform/engines/regex_engine.py",
+      "status": "added",
+      "additions": 58,
+      "deletions": 0
+    },
+    {
+      "path": "platform/definitions/definitions.yaml",
+      "status": "added",
+      "additions": 44,
+      "deletions": 0
+    },
+    {
+      "path": "platform/guardrail_platform/settings.py",
+      "status": "added",
+      "additions": 33,
+      "deletions": 0
+    },
+    {
+      "path": "platform/guardrail_platform/models.py",
+      "status": "added",
+      "additions": 26,
+      "deletions": 0
+    },
+    {
+      "path": "docker-compose.yml",
+      "status": "modified",
+      "additions": 23,
+      "deletions": 0
+    },
+    {
+      "path": "platform/guardrail_platform/engines/__init__.py",
+      "status": "added",
+      "additions": 19,
+      "deletions": 0
+    },
+    {
+      "path": "platform/Dockerfile",
+      "status": "added",
+      "additions": 18,
+      "deletions": 0
+    },
+    {
+      "path": ".specify/memory/constitution.md",
+      "status": "modified",
+      "additions": 11,
+      "deletions": 2
+    },
+    {
+      "path": "platform/guardrail_platform/engines/base.py",
+      "status": "added",
+      "additions": 13,
+      "deletions": 0
+    },
+    {
+      "path": "platform/requirements.txt",
+      "status": "added",
+      "additions": 6,
+      "deletions": 0
+    },
+    {
+      "path": ".env.example",
+      "status": "modified",
+      "additions": 1,
+      "deletions": 0
+    },
+    {
+      "path": ".gitignore",
+      "status": "modified",
+      "additions": 1,
+      "deletions": 0
+    },
+    {
+      "path": "platform/guardrail_platform/__init__.py",
+      "status": "added",
+      "additions": 1,
+      "deletions": 0
+    },
+    {
+      "path": ".DS_Store",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    },
+    {
+      "path": "docs/image.png",
+      "status": "added",
+      "additions": 0,
+      "deletions": 0
+    }
+  ],
+  "excluded": [],
+  "largeDiff": true,
+  "specs": [
+    {
+      "dir": "specs/001-minimal-proxy",
+      "files": [
+        "spec.md",
+        "plan.md",
+        "tasks.md"
+      ]
+    },
+    {
+      "dir": "specs/002-virtual-keys",
+      "files": [
+        "spec.md",
+        "plan.md",
+        "tasks.md"
+      ]
+    },
+    {
+      "dir": "specs/003-content-filter-guardrails",
+      "files": [
+        "spec.md",
+        "plan.md",
+        "tasks.md"
+      ]
+    },
+    {
+      "dir": "specs/004-guardrail-platform-mvp",
+      "files": [
+        "spec.md",
+        "plan.md",
+        "tasks.md"
+      ]
+    }
+  ],
+  "conventions": [],
+  "warnings": [
+    "Diff grande (44715 líneas): léelo por archivos, empezando por los de más cambios, y apóyate en las especificaciones."
+  ],
+  "metaDraft": {
+    "reviewId": "feature-004-guardrail-platform-mvp-bc6c086-dirty-20261127-0630",
+    "project": "litellm-gateway",
+    "title": "feat: tunnel port in platform",
+    "summary": "(pendiente: 1–2 frases sobre qué hace el cambio)",
+    "generatedAt": "2026-11-27T05:30:41.073Z",
+    "source": {
+      "type": "branch",
+      "base": "main",
+      "head": "feature/004-guardrail-platform-mvp",
+      "mergeBase": "b141d1daa16f1b9143b33f647d9a9502411628b7",
+      "commit": "bc6c086cd006e51487fced6eb3c61058c262439c",
+      "dirty": true,
+      "repoUrl": "https://github.com/gerardo-quiros/litellm-gateway",
+      "published": true
+    },
+    "stats": {
+      "filesChanged": 38,
+      "additions": 34057,
+      "deletions": 109
+    }
+  }
+}

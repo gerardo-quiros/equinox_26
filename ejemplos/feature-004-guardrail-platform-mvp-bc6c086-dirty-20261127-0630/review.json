@@ -1,0 +1,1097 @@
+{
+  "schemaVersion": "1.1",
+  "meta": {
+    "reviewId": "feature-004-guardrail-platform-mvp-bc6c086-dirty-20261127-0630",
+    "project": "litellm-gateway",
+    "title": "feat: tunnel port in platform",
+    "summary": "Añade la plataforma de guardrails (FastAPI + motores regex e injection-heuristic) y un adaptador fail-closed en LiteLLM. Diff grande: ~32 000 de las 34 000 líneas son artefactos de `.hitl/`; se revisó el código de `platform/` y `gateway/`. Los cambios sin commitear desactivan la autenticación del endpoint y recortan definiciones; el puerto 8000 está publicado.",
+    "generatedAt": "2026-11-27T05:30:41.073Z",
+    "source": {
+      "type": "branch",
+      "base": "main",
+      "head": "feature/004-guardrail-platform-mvp",
+      "mergeBase": "b141d1daa16f1b9143b33f647d9a9502411628b7",
+      "commit": "bc6c086cd006e51487fced6eb3c61058c262439c",
+      "dirty": true,
+      "repoUrl": "https://github.com/gerardo-quiros/litellm-gateway",
+      "published": true
+    },
+    "stats": {
+      "filesChanged": 38,
+      "additions": 34057,
+      "deletions": 109
+    },
+    "missionName": "Puerta del Guardián"
+  },
+  "study": {
+    "chronicle": {
+      "title": "Puerta del Guardián",
+      "text": "La rama construye una plataforma de guardrails en su propio contenedor (FastAPI) con dos motores, `regex` e `injection-heuristic`, y definiciones en un YAML. LiteLLM la consulta antes de cada llamada con un adaptador fino que falla cerrado. Los cambios sin commitear recortan definiciones, anulan el token y el último commit publica el puerto 8000."
+    },
+    "map": {
+      "flow": [
+        {
+          "label": "Guardrail `platform` (config.yaml)",
+          "detail": "Pre-call y activo por defecto para toda petición.",
+          "ref": {
+            "file": "config.yaml",
+            "lines": {
+              "start": 48,
+              "end": 52
+            }
+          }
+        },
+        {
+          "label": "PlatformGuardrail.async_pre_call_hook",
+          "detail": "Envía `messages` y `team_id` a `/v1/check` con timeout de 2 s.",
+          "ref": {
+            "file": "gateway/platform_adapter.py",
+            "lines": {
+              "start": 44,
+              "end": 69
+            }
+          }
+        },
+        {
+          "label": "POST /v1/check",
+          "detail": "Valida el token (hoy anulado) y el cuerpo con `CheckRequest`.",
+          "ref": {
+            "file": "platform/guardrail_platform/main.py",
+            "lines": {
+              "start": 70,
+              "end": 75
+            }
+          }
+        },
+        {
+          "label": "evaluate()",
+          "detail": "Recorre las definiciones por `order` sobre cada texto de cada mensaje.",
+          "ref": {
+            "file": "platform/guardrail_platform/pipeline.py",
+            "lines": {
+              "start": 43,
+              "end": 68
+            }
+          }
+        },
+        {
+          "label": "Motores regex / injection",
+          "detail": "`regex` enmascara o bloquea; `injection-heuristic` bloquea por frase normalizada.",
+          "ref": {
+            "file": "platform/guardrail_platform/engines/regex_engine.py",
+            "lines": {
+              "start": 45,
+              "end": 58
+            }
+          }
+        },
+        {
+          "label": "Decisión aplicada",
+          "detail": "`allow` sigue, `block` da 400, `modify` sustituye `messages`; cualquier fallo da 503.",
+          "ref": {
+            "file": "gateway/platform_adapter.py",
+            "lines": {
+              "start": 99,
+              "end": 112
+            }
+          }
+        }
+      ],
+      "components": [
+        {
+          "name": "gateway/platform_adapter.py",
+          "role": "Adaptador",
+          "detail": "CustomGuardrail de LiteLLM sin reglas; aplica la decisión y falla cerrado.",
+          "ref": {
+            "file": "gateway/platform_adapter.py"
+          }
+        },
+        {
+          "name": "guardrail_platform/main.py",
+          "role": "API",
+          "detail": "FastAPI con `/health` y `/v1/check`; carga ajustes y definiciones en el arranque.",
+          "ref": {
+            "file": "platform/guardrail_platform/main.py"
+          }
+        },
+        {
+          "name": "pipeline.py",
+          "role": "Orquestación",
+          "detail": "Aplica las definiciones en orden sobre una copia profunda de los mensajes.",
+          "ref": {
+            "file": "platform/guardrail_platform/pipeline.py"
+          }
+        },
+        {
+          "name": "definitions.py",
+          "role": "Carga y validación",
+          "detail": "Valida el YAML con pydantic y compila cada configuración de motor.",
+          "ref": {
+            "file": "platform/guardrail_platform/definitions.py"
+          }
+        },
+        {
+          "name": "engines/regex_engine.py",
+          "role": "Motor",
+          "detail": "Lista de patrones con acción `mask` o `block`.",
+          "ref": {
+            "file": "platform/guardrail_platform/engines/regex_engine.py"
+          }
+        },
+        {
+          "name": "engines/injection_heuristic.py",
+          "role": "Motor",
+          "detail": "Frases normalizadas (acentos, mayúsculas, espacios) que bloquean.",
+          "ref": {
+            "file": "platform/guardrail_platform/engines/injection_heuristic.py"
+          }
+        },
+        {
+          "name": "definitions.yaml",
+          "role": "Datos",
+          "detail": "Definiciones versionadas: injection y email activas; DNI comentada.",
+          "ref": {
+            "file": "platform/definitions/definitions.yaml"
+          }
+        },
+        {
+          "name": "docker-compose.yml",
+          "role": "Infraestructura",
+          "detail": "Añade el servicio `platform` (con puerto 8000 publicado) y `PLATFORM_TOKEN`.",
+          "ref": {
+            "file": "docker-compose.yml",
+            "lines": {
+              "start": 36,
+              "end": 52
+            }
+          }
+        }
+      ],
+      "models": [
+        {
+          "name": "CheckRequest",
+          "role": "Entrada API",
+          "detail": "Lo que envía el adaptador; `team_id` se ignora en 004.",
+          "fields": [
+            "team_id",
+            "messages"
+          ],
+          "ref": {
+            "file": "platform/guardrail_platform/models.py",
+            "lines": {
+              "start": 10,
+              "end": 12
+            }
+          }
+        },
+        {
+          "name": "Decision",
+          "role": "Salida API",
+          "detail": "Resultado: allow, block o modify, con los mensajes modificados y lo que actuó.",
+          "fields": [
+            "decision",
+            "reason",
+            "messages",
+            "acted"
+          ],
+          "ref": {
+            "file": "platform/guardrail_platform/models.py",
+            "lines": {
+              "start": 22,
+              "end": 26
+            }
+          }
+        },
+        {
+          "name": "ActedEntry",
+          "role": "Salida API",
+          "detail": "Definición que actuó: nombre, motor, acción y número de coincidencias.",
+          "fields": [
+            "name",
+            "engine",
+            "action",
+            "matches"
+          ],
+          "ref": {
+            "file": "platform/guardrail_platform/models.py",
+            "lines": {
+              "start": 15,
+              "end": 19
+            }
+          }
+        },
+        {
+          "name": "DefinitionRow",
+          "role": "Fila de definición",
+          "detail": "Forma del YAML; pensada para convertirse en fila de BD en la 005.",
+          "fields": [
+            "name",
+            "engine",
+            "order",
+            "config"
+          ],
+          "ref": {
+            "file": "platform/guardrail_platform/definitions.py",
+            "lines": {
+              "start": 37,
+              "end": 45
+            }
+          }
+        }
+      ],
+      "decisions": [
+        {
+          "title": "Fail-closed en el adaptador",
+          "detail": "Cualquier fallo (red, timeout, 401, respuesta rara) rechaza con 503 en lugar de dejar pasar.",
+          "ref": {
+            "file": "gateway/platform_adapter.py",
+            "lines": {
+              "start": 23,
+              "end": 27
+            },
+            "snippet": "def _unavailable(reason: str) -> HTTPException:\n    return HTTPException(\n        status_code=503,\n        detail={\"error\": f\"Guardrail platform unavailable: {reason}\"},\n    )"
+          }
+        },
+        {
+          "title": "Reglas como datos, motores como código",
+          "detail": "Los motores reciben su configuración; las definiciones viven en YAML y se cambian reiniciando solo la plataforma.",
+          "focusIds": [
+            "F3"
+          ]
+        },
+        {
+          "title": "Bloqueo antes que enmascarado",
+          "detail": "El orden decide qué ve cada definición: `prompt-injection` (10) ve el texto original antes que `email-mask` (30).",
+          "ref": {
+            "file": "platform/definitions/definitions.yaml",
+            "lines": {
+              "start": 6,
+              "end": 9
+            }
+          }
+        },
+        {
+          "title": "Errores sin texto del usuario",
+          "detail": "`hide_input_in_errors` y mensajes de error propios evitan que token o mensajes acaben en respuestas o logs.",
+          "ref": {
+            "file": "platform/guardrail_platform/main.py",
+            "lines": {
+              "start": 58,
+              "end": 62
+            }
+          }
+        }
+      ],
+      "edgeCases": [
+        {
+          "title": "Plataforma caída o lenta",
+          "detail": "El adaptador responde 503 «unavailable» (timeout, unreachable o invalid response) y no llama al modelo.",
+          "focusIds": [
+            "F4"
+          ]
+        },
+        {
+          "title": "Definiciones inválidas",
+          "detail": "El `lifespan` relanza `DefinitionError`: la plataforma no arranca y el healthcheck falla, así que LiteLLM no sube.",
+          "ref": {
+            "file": "platform/guardrail_platform/main.py",
+            "lines": {
+              "start": 40,
+              "end": 44
+            },
+            "snippet": "    try:\n        app.state.definitions = load_definitions(str(settings.definitions_file))\n    except DefinitionError as exc:\n        logger.error(\"invalid definitions: %s\", exc)\n        raise"
+          }
+        },
+        {
+          "title": "Contenido como lista de partes",
+          "detail": "Solo se evalúan partes `type: text`; las demás pasan sin cambios.",
+          "ref": {
+            "file": "platform/guardrail_platform/pipeline.py",
+            "lines": {
+              "start": 14,
+              "end": 22
+            }
+          }
+        },
+        {
+          "title": "Petición sin `messages`",
+          "detail": "Se devuelve `None` y no se consulta a la plataforma (por confirmar qué rutas llegan así).",
+          "focusIds": [
+            "F5"
+          ],
+          "ref": {
+            "file": "gateway/platform_adapter.py",
+            "lines": {
+              "start": 55,
+              "end": 57
+            },
+            "snippet": "        messages = data.get(\"messages\")\n        if not isinstance(messages, list) or not messages:\n            return None  # not a chat request: nothing to check"
+          }
+        }
+      ],
+      "tests": [
+        {
+          "name": "scripts/check-platform.sh",
+          "detail": "Casos P01… con modelo real: token, masking, bloqueo, fail-closed, cambio de definiciones, IBAN. Varios casos ya no coinciden con la configuración.",
+          "ref": {
+            "file": "scripts/check-platform.sh"
+          }
+        },
+        {
+          "name": "scripts/check.sh",
+          "detail": "Comprobaciones de la 001 (proxy mínimo) que deben seguir pasando.",
+          "ref": {
+            "file": "scripts/check.sh"
+          }
+        },
+        {
+          "name": "scripts/check-persistence.sh",
+          "detail": "Comprobaciones de la 002 (claves virtuales y persistencia).",
+          "ref": {
+            "file": "scripts/check-persistence.sh"
+          }
+        },
+        {
+          "name": "scripts/validate-client.sh",
+          "detail": "Valida los flujos `/corp/*` del proyecto `../litellm-test`.",
+          "ref": {
+            "file": "scripts/validate-client.sh"
+          }
+        }
+      ]
+    },
+    "teachings": [
+      {
+        "title": "Un 503 de «Guardrail platform unavailable» no es un bloqueo",
+        "text": "Es fail-closed: el adaptador no pudo obtener una decisión. Mira primero `docker compose logs platform` y el motivo (`timeout`, `unreachable`, `unauthorized`, `invalid response`). Un bloqueo real es un 400 con la regla.",
+        "focusIds": [
+          "F4"
+        ],
+        "ref": {
+          "file": "gateway/platform_adapter.py",
+          "lines": {
+            "start": 23,
+            "end": 27
+          },
+          "snippet": "def _unavailable(reason: str) -> HTTPException:\n    return HTTPException(\n        status_code=503,\n        detail={\"error\": f\"Guardrail platform unavailable: {reason}\"},\n    )"
+        }
+      },
+      {
+        "title": "Cambiar una definición = reiniciar solo la plataforma",
+        "text": "El YAML se lee una vez en el arranque. Si tras editarlo no cambia nada, comprueba que reiniciaste `platform` y que `/health` informa el número de definiciones esperado."
+      },
+      {
+        "title": "El orden es parte de la regla",
+        "text": "Las definiciones se aplican por `order` y cada una ve el texto ya modificado. Si un bloqueo deja de saltar, mira si una definición anterior enmascaró lo que buscaba.",
+        "focusIds": [
+          "F3"
+        ]
+      },
+      {
+        "title": "Antes de commitear, revisa lo que no es tuyo",
+        "text": "Esta rama tiene ediciones temporales sin commitear (`return` en la autenticación, definiciones comentadas) y un puerto publicado. Un `git diff` de `main.py`, `config.yaml` y `docker-compose.yml` evita sorpresas.",
+        "focusIds": [
+          "F1",
+          "F2"
+        ]
+      }
+    ]
+  },
+  "focuses": [
+    {
+      "id": "F1",
+      "type": "risk",
+      "priority": "high",
+      "title": "Autenticación de /v1/check anulada por un `return`",
+      "why": "Un `return` colocado antes de `hmac.compare_digest` hace que `require_token` acepte cualquier petición, con o sin token. Es un cambio sin commitear: parece una prueba temporal, pero rompe FR-004 y el check P02 (401 sin token). Si se commitea, el endpoint queda abierto.",
+      "evidence": [
+        {
+          "kind": "diff",
+          "file": "platform/guardrail_platform/main.py",
+          "lines": {
+            "start": 51,
+            "end": 55
+          },
+          "snippet": "def require_token(request: Request, authorization: str = Header(default=\"\")) -> None:\n    presented = authorization[len(\"Bearer \"):] if authorization.startswith(\"Bearer \") else \"\"\n    return\n    if not hmac.compare_digest(presented.encode(\"utf-8\"), request.app.state.token):\n        raise HTTPException(status_code=401, detail=\"unauthorized\", headers={\"WWW-Authenticate\": \"Bearer\"})",
+          "note": "Cambio sin commitear: la línea `return` (53) no está en HEAD."
+        },
+        {
+          "kind": "spec",
+          "file": "specs/004-guardrail-platform-mvp/spec.md",
+          "lines": {
+            "start": 126,
+            "end": 126
+          },
+          "snippet": "- **FR-004**: The check endpoint MUST require a shared token read from `.env`; a request without the correct token MUST be rejected and the token MUST NOT appear in responses or logs."
+        }
+      ]
+    },
+    {
+      "id": "F2",
+      "type": "requirement-gap",
+      "priority": "high",
+      "title": "El puerto 8000 de la plataforma se publica en todas las interfaces",
+      "why": "La spec exige que la plataforma no publique ningún puerto (FR-001) y que nada se exponga fuera de `127.0.0.1` (FR-024). El commit `feat: tunnel port in platform` añade `\"8000:8000\"`, que enlaza a `0.0.0.0`. Junto con F1, cualquiera en la red podría llamar a `/v1/check` sin token. Puede ser intencionado para depurar; hay que confirmarlo.",
+      "evidence": [
+        {
+          "kind": "config",
+          "file": "docker-compose.yml",
+          "lines": {
+            "start": 36,
+            "end": 45
+          },
+          "snippet": "  platform:\n    build: ./platform\n    image: litellm-gateway-platform:0.1.0\n    ports:\n      - \"8000:8000\"\n    volumes:\n      - ./platform/definitions:/srv/definitions:ro\n    environment:\n      PLATFORM_TOKEN: ${PLATFORM_TOKEN:?PLATFORM_TOKEN must be set in .env}\n      PLATFORM_DEFINITIONS: /srv/definitions/definitions.yaml"
+        },
+        {
+          "kind": "config",
+          "file": "docker-compose.yml",
+          "lines": {
+            "start": 54,
+            "end": 58
+          },
+          "snippet": "  litellm:\n    image: litellm/litellm:v1.109.1\n    ports:\n      - \"127.0.0.1:${LITELLM_PORT:-4100}:4000\"\n    volumes:",
+          "note": "El servicio litellm sí enlaza a `127.0.0.1`."
+        },
+        {
+          "kind": "spec",
+          "file": "specs/004-guardrail-platform-mvp/spec.md",
+          "lines": {
+            "start": 160,
+            "end": 160
+          },
+          "snippet": "- **FR-024**: No service MUST be exposed beyond `127.0.0.1`; the only new secret is the shared platform token, which MUST be in `.env` and listed in `.env.example` with a placeholder."
+        }
+      ]
+    },
+    {
+      "id": "F3",
+      "type": "requirement-gap",
+      "priority": "high",
+      "title": "Definiciones e IBAN recortados frente a la spec",
+      "why": "FR-012 pide exactamente cuatro definiciones; el YAML activo tiene dos (se quitaron el keyword bloqueado y el DNI, este último comentado). Además `iban-mask-input`, que FR-018 obliga a mantener, está comentado en `config.yaml`. Las historias de usuario de DNI, keyword e IBAN y los checks P04, P07, P12 y P14 dejan de cumplirse. La intención (¿experimento temporal?) se infiere.",
+      "evidence": [
+        {
+          "kind": "config",
+          "file": "platform/definitions/definitions.yaml",
+          "lines": {
+            "start": 27,
+            "end": 44
+          },
+          "snippet": "  - name: email-mask\n    engine: regex\n    order: 30\n    config:\n      patterns:\n        - '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}'\n      action: mask\n      placeholder: '[EMAIL_MASKED]'\n\n  # - name: es-dni-mask\n  #   engine: regex\n  #   order: 40\n  #   config:\n  #     # Format only: 8 digits and a letter (control letter not checked, as in 003).\n  #     patterns:\n  #       - '(?<![0-9A-Za-z])[0-9]{8}[A-Za-z](?![0-9A-Za-z])'\n  #     action: mask\n  #     placeholder: '[ES_DNI_MASKED]'"
+        },
+        {
+          "kind": "diff",
+          "file": "config.yaml",
+          "lines": {
+            "start": 36,
+            "end": 47
+          },
+          "snippet": "guardrails:\n  # - guardrail_name: iban-mask-input\n  #   litellm_params:\n  #     guardrail: litellm_content_filter\n  #     mode: pre_call\n  #     default_on: true\n  #     patterns:\n  #       # Spanish IBAN: ES, 2 check digits, 20 digits, optionally in groups of four.\n  #       - pattern_type: regex\n  #         name: es_iban\n  #         pattern: '(?<![0-9A-Za-z])ES[0-9]{2}(?: ?[0-9]{4}){5}(?![0-9])'\n  #         action: MASK",
+          "note": "El guardrail `iban-mask-input` pasó a comentarios."
+        },
+        {
+          "kind": "spec",
+          "file": "specs/004-guardrail-platform-mvp/spec.md",
+          "lines": {
+            "start": 137,
+            "end": 137
+          },
+          "snippet": "- **FR-012**: The shipped definitions file MUST contain exactly four definitions, in this order: prompt injection (`injection-heuristic`, block), one invented blocked business keyword (`regex`, block, whole word, case-insensitive), email masking (`regex`, mask), and Spanish DNI masking (`regex`, mask)."
+        },
+        {
+          "kind": "spec",
+          "file": "specs/004-guardrail-platform-mvp/spec.md",
+          "lines": {
+            "start": 149,
+            "end": 149
+          },
+          "snippet": "- **FR-018**: The 003 guardrails `pii-mask-input`, `keywords-input`, `injection-block-input`, `denied-advice-optin`, and `observe-only` MUST be removed from `config.yaml`. One built-in guardrail MUST stay as an example: `iban-mask-input`, using the bundled content filter, pre-call, on by default, masking Spanish IBANs with the 003 pattern and placeholder."
+        },
+        {
+          "kind": "test",
+          "file": "scripts/check-platform.sh",
+          "lines": {
+            "start": 460,
+            "end": 471
+          },
+          "snippet": "P07_A='[{\"role\":\"user\",\"content\":\"Status of project-nightfall?\"}]'\nP07_B='[{\"role\":\"user\",\"content\":\"STATUS OF PROJECT-NIGHTFALL?\"}]'\nchat_turn valid \"$P07_A\" '{}' \"$WORK/mi.p07a.json\"\nP07A_MI=$MI_FOUND; P07A_CODE=$LAST_CODE; P07A_MSG=$(error_message)\nchat_turn valid \"$P07_B\" '{}' \"$WORK/mi.p07b.json\"\nP07B_MI=$MI_FOUND; P07B_CODE=$LAST_CODE; P07B_MSG=$(error_message)\nif [ \"$P07A_CODE\" = \"400\" ] && [ \"$P07B_CODE\" = \"400\" ] && [ \"$P07A_MI\" = 0 ] && [ \"$P07B_MI\" = 0 ] \\\n   && [[ \"$P07A_MSG\" == \"Blocked by guardrail platform: blocked-keyword-nightfall\"* ]] \\\n   && [[ \"$P07B_MSG\" == \"Blocked by guardrail platform: blocked-keyword-nightfall\"* ]]; then\n  pass P07 \"project-nightfall in any case is refused with the reason; no model request\"\nelse\n  fail P07 \"project-nightfall in any case is refused with the reason; no model request\" \"codes $P07A_CODE/$P07B_CODE, model reached $P07A_MI/$P07B_MI\"",
+          "note": "P07 espera que `project-nightfall` se bloquee; esa definición ya no existe."
+        }
+      ]
+    },
+    {
+      "id": "F4",
+      "type": "risk",
+      "priority": "medium",
+      "title": "Regex sin límite de tamaño y timeout de 2 s",
+      "why": "El patrón de email `[A-Za-z0-9._%+-]+@…` es cuadrático en textos largos sin `@`: medido en local, 100 000 caracteres tardan unos 4 s (20 000, 0,2 s). No hay límite de tamaño de petición. Si la plataforma tarda más de 2 s, el adaptador falla cerrado con 503, y mensajes largos podrían degradar el servicio. La medición no pasó por el servicio real.",
+      "evidence": [
+        {
+          "kind": "config",
+          "file": "platform/definitions/definitions.yaml",
+          "lines": {
+            "start": 27,
+            "end": 34
+          },
+          "snippet": "  - name: email-mask\n    engine: regex\n    order: 30\n    config:\n      patterns:\n        - '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}'\n      action: mask\n      placeholder: '[EMAIL_MASKED]'"
+        },
+        {
+          "kind": "code",
+          "file": "platform/guardrail_platform/engines/regex_engine.py",
+          "lines": {
+            "start": 52,
+            "end": 58
+          },
+          "snippet": "    # A lambda keeps the placeholder literal (no backslash processing).\n    placeholder = state.placeholder or \"\"\n    total = 0\n    for pattern in state.compiled:\n        text, count = pattern.subn(lambda _match: placeholder, text)\n        total += count\n    return EngineResult(text=text, matches=total)"
+        },
+        {
+          "kind": "code",
+          "file": "gateway/platform_adapter.py",
+          "lines": {
+            "start": 20,
+            "end": 20
+          },
+          "snippet": "TIMEOUT_SECONDS = 2.0",
+          "note": "Timeout fijo de 2 s; al vencer se responde 503."
+        }
+      ]
+    },
+    {
+      "id": "F5",
+      "type": "risk",
+      "priority": "medium",
+      "title": "Peticiones sin `messages` no pasan por la plataforma",
+      "why": "Si `data[\"messages\"]` no es una lista no vacía, el adaptador devuelve `None` sin consultar a la plataforma. Es coherente con «no es chat», pero la spec dice que cada definición se aplica a cada petición. No he comprobado qué rutas de LiteLLM con clave virtual llegan a este hook sin `messages` (completions, embeddings, responses): requiere confirmación.",
+      "evidence": [
+        {
+          "kind": "code",
+          "file": "gateway/platform_adapter.py",
+          "lines": {
+            "start": 55,
+            "end": 57
+          },
+          "snippet": "        messages = data.get(\"messages\")\n        if not isinstance(messages, list) or not messages:\n            return None  # not a chat request: nothing to check"
+        },
+        {
+          "kind": "spec",
+          "file": "specs/004-guardrail-platform-mvp/spec.md",
+          "lines": {
+            "start": 132,
+            "end": 132
+          },
+          "snippet": "- **FR-007**: Every definition MUST apply to every request, in ascending `order`. Each definition MUST see the messages as left by the definitions before it; the first definition that blocks ends the evaluation."
+        }
+      ]
+    },
+    {
+      "id": "F6",
+      "type": "test-gap",
+      "priority": "low",
+      "title": "Sin pruebas unitarias de motores ni pipeline",
+      "why": "La lógica de `evaluate()` y de los motores solo se verifica con scripts de shell que necesitan Docker, Ollama y el stack completo. No hay carpeta de tests ni pytest en `platform/` (búsqueda de `test*` y `pytest` en `platform/` sin resultados). Un cambio en el orden o en el bloqueo solo se detecta con el stack levantado.",
+      "evidence": [
+        {
+          "kind": "code",
+          "file": "platform/guardrail_platform/pipeline.py",
+          "lines": {
+            "start": 43,
+            "end": 68
+          },
+          "snippet": "def evaluate(definitions: list[Definition], messages: list[dict[str, Any]]) -> dict[str, Any]:\n    \"\"\"Return a decision: allow, block (with reason), or modify (with the full messages).\"\"\"\n    working = copy.deepcopy(messages)\n    acted: list[dict[str, Any]] = []\n\n    for definition in definitions:\n        total = 0\n        for slot in list(_slots(working)):\n            result = definition.module.apply(definition.state, _get(working, slot))\n            if result.block_reason is not None:\n                acted.append(_entry(definition, \"block\", 1))\n                return {\n                    \"decision\": \"block\",\n                    \"reason\": f\"{definition.name}: {result.block_reason}\",\n                    \"messages\": None,\n                    \"acted\": acted,\n                }\n            if result.matches:\n                _set(working, slot, result.text)\n                total += result.matches\n        if total:\n            acted.append(_entry(definition, definition.action, total))\n\n    if working != messages:\n        return {\"decision\": \"modify\", \"reason\": None, \"messages\": working, \"acted\": acted}\n    return {\"decision\": \"allow\", \"reason\": None, \"messages\": None, \"acted\": acted}",
+          "note": "Núcleo de la decisión, sin pruebas unitarias propias."
+        }
+      ]
+    },
+    {
+      "id": "F7",
+      "type": "decision",
+      "priority": "low",
+      "title": "`.hitl/` sin ignorar mete miles de líneas en el diff",
+      "why": "Los artefactos de revisiones anteriores (`.hitl/`) están sin ignorar y suman unas 32 000 líneas al diff; además `.DS_Store` aparece como nuevo. `.gitignore` añade la ruta de una skill pero sin salto de línea final. Conviene ignorar `.hitl/` y `.DS_Store` antes de commitear.",
+      "evidence": [
+        {
+          "kind": "config",
+          "file": ".gitignore",
+          "lines": {
+            "start": 1,
+            "end": 5
+          },
+          "snippet": ".env\n.claude/settings.local.json\nspecs\n__pycache__/\n.claude/skills/la-senda",
+          "note": "El cambio sin commitear añade la última línea."
+        }
+      ]
+    }
+  ],
+  "flashcards": [
+    {
+      "id": "C1",
+      "focusIds": [
+        "F1"
+      ],
+      "front": "Si una petición llega a `/v1/check` sin cabecera `Authorization`, ¿qué hace hoy `require_token`?",
+      "title": "No comprueba nada",
+      "back": "Hace `return` antes de `hmac.compare_digest`, así que acepta cualquier petición. La comprobación de la línea siguiente es código inalcanzable.",
+      "evidence": [
+        {
+          "kind": "code",
+          "file": "platform/guardrail_platform/main.py",
+          "lines": {
+            "start": 51,
+            "end": 55
+          },
+          "snippet": "def require_token(request: Request, authorization: str = Header(default=\"\")) -> None:\n    presented = authorization[len(\"Bearer \"):] if authorization.startswith(\"Bearer \") else \"\"\n    return\n    if not hmac.compare_digest(presented.encode(\"utf-8\"), request.app.state.token):\n        raise HTTPException(status_code=401, detail=\"unauthorized\", headers={\"WWW-Authenticate\": \"Bearer\"})"
+        }
+      ]
+    },
+    {
+      "id": "C2",
+      "focusIds": [
+        "F2"
+      ],
+      "front": "¿Cómo se publica el puerto del servicio `platform` en el host y en qué se diferencia del de `litellm`?",
+      "title": "`8000:8000`, sin IP",
+      "back": "`\"8000:8000\"` enlaza a todas las interfaces. `litellm` usa `127.0.0.1:${LITELLM_PORT}:4000`, solo local. La spec no permite ningún puerto en la plataforma.",
+      "evidence": [
+        {
+          "kind": "config",
+          "file": "docker-compose.yml",
+          "lines": {
+            "start": 39,
+            "end": 40
+          },
+          "snippet": "    ports:\n      - \"8000:8000\""
+        },
+        {
+          "kind": "config",
+          "file": "docker-compose.yml",
+          "lines": {
+            "start": 56,
+            "end": 57
+          },
+          "snippet": "    ports:\n      - \"127.0.0.1:${LITELLM_PORT:-4100}:4000\""
+        }
+      ]
+    },
+    {
+      "id": "C3",
+      "focusIds": [
+        "F3"
+      ],
+      "front": "¿Cuántas definiciones activas tiene `definitions.yaml` y cuáles son?",
+      "title": "Dos: injection y email",
+      "back": "`prompt-injection` y `email-mask`. La spec (FR-012) pide cuatro; el keyword bloqueado se eliminó y `es-dni-mask` está comentada.",
+      "evidence": [
+        {
+          "kind": "config",
+          "file": "platform/definitions/definitions.yaml",
+          "lines": {
+            "start": 6,
+            "end": 10
+          },
+          "snippet": "definitions:\n  - name: prompt-injection\n    engine: injection-heuristic\n    order: 10\n    config:"
+        },
+        {
+          "kind": "spec",
+          "file": "specs/004-guardrail-platform-mvp/spec.md",
+          "lines": {
+            "start": 137,
+            "end": 137
+          },
+          "snippet": "- **FR-012**: The shipped definitions file MUST contain exactly four definitions, in this order: prompt injection (`injection-heuristic`, block), one invented blocked business keyword (`regex`, block, whole word, case-insensitive), email masking (`regex`, mask), and Spanish DNI masking (`regex`, mask)."
+        }
+      ]
+    },
+    {
+      "id": "C4",
+      "focusIds": [
+        "F4"
+      ],
+      "front": "¿Qué ocurre si la plataforma tarda más que el timeout del adaptador?",
+      "title": "503 «timeout», fail-closed",
+      "back": "El adaptador captura `httpx.TimeoutException` y lanza `HTTPException` 503 con «Guardrail platform unavailable: timeout». El timeout vale 2,0 s.",
+      "evidence": [
+        {
+          "kind": "code",
+          "file": "gateway/platform_adapter.py",
+          "lines": {
+            "start": 20,
+            "end": 20
+          },
+          "snippet": "TIMEOUT_SECONDS = 2.0"
+        },
+        {
+          "kind": "code",
+          "file": "gateway/platform_adapter.py",
+          "lines": {
+            "start": 66,
+            "end": 67
+          },
+          "snippet": "        except httpx.TimeoutException:\n            raise _unavailable(\"timeout\") from None"
+        }
+      ]
+    },
+    {
+      "id": "C5",
+      "focusIds": [
+        "F5"
+      ],
+      "front": "¿Qué devuelve `async_pre_call_hook` si `data[\"messages\"]` falta o está vacío?",
+      "title": "`None`, sin consultar",
+      "back": "Devuelve `None` («nada que comprobar») antes de llamar a la plataforma. La petición sigue su curso sin ningún guardrail de la plataforma.",
+      "evidence": [
+        {
+          "kind": "code",
+          "file": "gateway/platform_adapter.py",
+          "lines": {
+            "start": 55,
+            "end": 57
+          },
+          "snippet": "        messages = data.get(\"messages\")\n        if not isinstance(messages, list) or not messages:\n            return None  # not a chat request: nothing to check"
+        }
+      ]
+    },
+    {
+      "id": "C6",
+      "focusIds": [
+        "F6"
+      ],
+      "front": "En `evaluate()`, ¿cuándo se detiene la evaluación y qué ve cada definición?",
+      "title": "En el primer bloqueo",
+      "back": "Las definiciones se recorren por `order`; cada una ve el texto ya enmascarado por las anteriores. La primera que devuelve `block_reason` termina con `decision: block`.",
+      "evidence": [
+        {
+          "kind": "code",
+          "file": "platform/guardrail_platform/pipeline.py",
+          "lines": {
+            "start": 48,
+            "end": 62
+          },
+          "snippet": "    for definition in definitions:\n        total = 0\n        for slot in list(_slots(working)):\n            result = definition.module.apply(definition.state, _get(working, slot))\n            if result.block_reason is not None:\n                acted.append(_entry(definition, \"block\", 1))\n                return {\n                    \"decision\": \"block\",\n                    \"reason\": f\"{definition.name}: {result.block_reason}\",\n                    \"messages\": None,\n                    \"acted\": acted,\n                }\n            if result.matches:\n                _set(working, slot, result.text)\n                total += result.matches"
+        }
+      ]
+    },
+    {
+      "id": "C7",
+      "focusIds": [
+        "F7"
+      ],
+      "front": "¿Qué línea añade a `.gitignore` el cambio sin commitear y qué carpeta generada sigue sin ignorarse?",
+      "title": "Añade la skill; falta `.hitl/`",
+      "back": "Añade `.claude/skills/la-senda` (sin salto de línea final). `.hitl/`, donde se guardan las revisiones, no figura, así que sus archivos entran en el diff.",
+      "evidence": [
+        {
+          "kind": "config",
+          "file": ".gitignore",
+          "lines": {
+            "start": 1,
+            "end": 5
+          },
+          "snippet": ".env\n.claude/settings.local.json\nspecs\n__pycache__/\n.claude/skills/la-senda"
+        }
+      ]
+    }
+  ],
+  "quiz": [
+    {
+      "id": "Q1",
+      "focusIds": [
+        "F1",
+        "F2"
+      ],
+      "kind": "single",
+      "title": "Llamada sin token desde otra máquina",
+      "prompt": "Con la rama tal como está en disco y el stack levantado, una máquina de la misma red hace `POST http://<host>:8000/v1/check` con un cuerpo válido y sin cabecera `Authorization`. ¿Qué responde la plataforma?",
+      "options": [
+        {
+          "id": "a",
+          "text": "401 `unauthorized`",
+          "why": "Eso es lo que espera el check P02, pero el `return` de la línea 53 de `main.py` salta la comprobación."
+        },
+        {
+          "id": "b",
+          "text": "200 con una decisión (`allow`, `modify` o `block`)"
+        },
+        {
+          "id": "c",
+          "text": "Conexión rechazada: el puerto no está publicado",
+          "why": "`docker-compose.yml` publica `\"8000:8000\"` en el servicio `platform`."
+        },
+        {
+          "id": "d",
+          "text": "422 por falta de cabecera",
+          "why": "`Authorization` tiene `default=\"\"`; la validación de FastAPI no falla por su ausencia."
+        }
+      ],
+      "correct": [
+        "b"
+      ],
+      "explanation": "El puerto está publicado en todas las interfaces y `require_token` retorna antes de comparar el token, así que el endpoint procesa el cuerpo y devuelve una decisión.",
+      "evidence": [
+        {
+          "kind": "code",
+          "file": "platform/guardrail_platform/main.py",
+          "lines": {
+            "start": 51,
+            "end": 55
+          },
+          "snippet": "def require_token(request: Request, authorization: str = Header(default=\"\")) -> None:\n    presented = authorization[len(\"Bearer \"):] if authorization.startswith(\"Bearer \") else \"\"\n    return\n    if not hmac.compare_digest(presented.encode(\"utf-8\"), request.app.state.token):\n        raise HTTPException(status_code=401, detail=\"unauthorized\", headers={\"WWW-Authenticate\": \"Bearer\"})"
+        },
+        {
+          "kind": "config",
+          "file": "docker-compose.yml",
+          "lines": {
+            "start": 36,
+            "end": 42
+          },
+          "snippet": "  platform:\n    build: ./platform\n    image: litellm-gateway-platform:0.1.0\n    ports:\n      - \"8000:8000\"\n    volumes:\n      - ./platform/definitions:/srv/definitions:ro"
+        }
+      ]
+    },
+    {
+      "id": "Q2",
+      "focusIds": [
+        "F3"
+      ],
+      "kind": "multiple",
+      "title": "Comportamientos que ya no se cumplen",
+      "prompt": "¿Qué tres comportamientos que exige la spec dejan de ocurrir con los `config.yaml` y `definitions.yaml` actuales?",
+      "options": [
+        {
+          "id": "a",
+          "text": "El DNI de la petición se enmascara con `[ES_DNI_MASKED]`"
+        },
+        {
+          "id": "b",
+          "text": "`project-nightfall` en cualquier mayúscula se rechaza"
+        },
+        {
+          "id": "c",
+          "text": "El email se sustituye por `[EMAIL_MASKED]`",
+          "why": "`email-mask` sigue activa en `definitions.yaml` (orden 30)."
+        },
+        {
+          "id": "d",
+          "text": "«ignore all previous instructions» se rechaza",
+          "why": "`prompt-injection` sigue activa (orden 10) y contiene esa frase."
+        },
+        {
+          "id": "e",
+          "text": "El IBAN español se enmascara antes de llegar al modelo"
+        }
+      ],
+      "correct": [
+        "a",
+        "b",
+        "e"
+      ],
+      "explanation": "`es-dni-mask` está comentada, `blocked-keyword-nightfall` se eliminó y `iban-mask-input` está comentado en `config.yaml`. Email e injection siguen activas.",
+      "evidence": [
+        {
+          "kind": "config",
+          "file": "platform/definitions/definitions.yaml",
+          "lines": {
+            "start": 6,
+            "end": 10
+          },
+          "snippet": "definitions:\n  - name: prompt-injection\n    engine: injection-heuristic\n    order: 10\n    config:"
+        },
+        {
+          "kind": "config",
+          "file": "platform/definitions/definitions.yaml",
+          "lines": {
+            "start": 36,
+            "end": 44
+          },
+          "snippet": "  # - name: es-dni-mask\n  #   engine: regex\n  #   order: 40\n  #   config:\n  #     # Format only: 8 digits and a letter (control letter not checked, as in 003).\n  #     patterns:\n  #       - '(?<![0-9A-Za-z])[0-9]{8}[A-Za-z](?![0-9A-Za-z])'\n  #     action: mask\n  #     placeholder: '[ES_DNI_MASKED]'"
+        },
+        {
+          "kind": "diff",
+          "file": "config.yaml",
+          "lines": {
+            "start": 36,
+            "end": 47
+          },
+          "snippet": "guardrails:\n  # - guardrail_name: iban-mask-input\n  #   litellm_params:\n  #     guardrail: litellm_content_filter\n  #     mode: pre_call\n  #     default_on: true\n  #     patterns:\n  #       # Spanish IBAN: ES, 2 check digits, 20 digits, optionally in groups of four.\n  #       - pattern_type: regex\n  #         name: es_iban\n  #         pattern: '(?<![0-9A-Za-z])ES[0-9]{2}(?: ?[0-9]{4}){5}(?![0-9])'\n  #         action: MASK"
+        }
+      ]
+    },
+    {
+      "id": "Q3",
+      "focusIds": [
+        "F4"
+      ],
+      "kind": "single",
+      "title": "La plataforma tarda más de 2 s",
+      "prompt": "Una petición provoca que `/v1/check` tarde 5 s en responder. ¿Qué ve el cliente de LiteLLM?",
+      "options": [
+        {
+          "id": "a",
+          "text": "La petición llega al modelo con los mensajes originales",
+          "why": "Sería fail-open; FR-016 y el adaptador exigen rechazar."
+        },
+        {
+          "id": "b",
+          "text": "Un 503 «Guardrail platform unavailable: timeout» y no se invoca el modelo"
+        },
+        {
+          "id": "c",
+          "text": "Un 400 «Blocked by guardrail platform» con la regla que tardó",
+          "why": "El 400 solo se emite con `decision == \"block\"`; un timeout no llega a tener decisión."
+        },
+        {
+          "id": "d",
+          "text": "El adaptador reintenta una vez y acepta la segunda respuesta",
+          "why": "No hay reintentos: `post` se llama una sola vez y el timeout lanza `_unavailable(\"timeout\")`."
+        }
+      ],
+      "correct": [
+        "b"
+      ],
+      "explanation": "El `httpx.AsyncClient` tiene `Timeout(2.0)`; al vencer, `async_pre_call_hook` lanza `_unavailable(\"timeout\")` (503) antes de cualquier llamada al modelo.",
+      "evidence": [
+        {
+          "kind": "code",
+          "file": "gateway/platform_adapter.py",
+          "lines": {
+            "start": 20,
+            "end": 20
+          },
+          "snippet": "TIMEOUT_SECONDS = 2.0"
+        },
+        {
+          "kind": "code",
+          "file": "gateway/platform_adapter.py",
+          "lines": {
+            "start": 60,
+            "end": 69
+          },
+          "snippet": "        try:\n            response = await self._http().post(\n                self._check_url,\n                json={\"team_id\": team_id, \"messages\": messages},\n                headers={\"Authorization\": f\"Bearer {self._token}\"},\n            )\n        except httpx.TimeoutException:\n            raise _unavailable(\"timeout\") from None\n        except httpx.HTTPError:\n            raise _unavailable(\"unreachable\") from None"
+        },
+        {
+          "kind": "spec",
+          "file": "specs/004-guardrail-platform-mvp/spec.md",
+          "lines": {
+            "start": 144,
+            "end": 144
+          },
+          "snippet": "- **FR-016**: The adapter MUST refuse the request (fail-closed) when the platform cannot be reached, does not answer within the timeout, rejects the token, or returns an answer it cannot understand. The error MUST say that the guardrail platform is unavailable and MUST NOT reveal the token."
+        }
+      ]
+    },
+    {
+      "id": "Q4",
+      "focusIds": [
+        "F5"
+      ],
+      "kind": "single",
+      "title": "Cuerpo sin `messages`",
+      "prompt": "Al hook `async_pre_call_hook` llega un `data` con `prompt` pero sin `messages`. ¿Qué hace el adaptador?",
+      "options": [
+        {
+          "id": "a",
+          "text": "Responde 503 por cuerpo no reconocible",
+          "why": "El 503 solo se lanza cuando falta token o falla la llamada a la plataforma."
+        },
+        {
+          "id": "b",
+          "text": "Envía todo `data` a `/v1/check` para que decida la plataforma",
+          "why": "`CheckRequest` exige `messages` con al menos un elemento; el adaptador ni siquiera hace la llamada."
+        },
+        {
+          "id": "c",
+          "text": "Devuelve `None` sin llamar a la plataforma"
+        },
+        {
+          "id": "d",
+          "text": "Rechaza con 400 «not a chat request»",
+          "why": "Ese texto solo existe en un comentario; no hay ningún rechazo en esa rama."
+        }
+      ],
+      "correct": [
+        "c"
+      ],
+      "explanation": "La rama `if not isinstance(messages, list) or not messages: return None` omite la consulta. Que esas rutas lleguen al hook es una deducción por confirmar.",
+      "evidence": [
+        {
+          "kind": "code",
+          "file": "gateway/platform_adapter.py",
+          "lines": {
+            "start": 55,
+            "end": 57
+          },
+          "snippet": "        messages = data.get(\"messages\")\n        if not isinstance(messages, list) or not messages:\n            return None  # not a chat request: nothing to check"
+        }
+      ]
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "S1",
+      "focusIds": [
+        "F1",
+        "F2"
+      ],
+      "title": "Docker Compose en una red compartida",
+      "situation": "Supongamos que se commitea la rama tal cual está en disco y alguien ejecuta `docker compose up` en una red compartida (coworking u oficina), con el firewall del equipo abierto.",
+      "prompt": "¿Qué podría hacer otra persona de esa red con la plataforma? ¿Aceptarías esto en la entrega y qué pedirías antes?",
+      "evidence": [
+        {
+          "kind": "code",
+          "file": "platform/guardrail_platform/main.py",
+          "lines": {
+            "start": 51,
+            "end": 55
+          },
+          "snippet": "def require_token(request: Request, authorization: str = Header(default=\"\")) -> None:\n    presented = authorization[len(\"Bearer \"):] if authorization.startswith(\"Bearer \") else \"\"\n    return\n    if not hmac.compare_digest(presented.encode(\"utf-8\"), request.app.state.token):\n        raise HTTPException(status_code=401, detail=\"unauthorized\", headers={\"WWW-Authenticate\": \"Bearer\"})"
+        },
+        {
+          "kind": "config",
+          "file": "docker-compose.yml",
+          "lines": {
+            "start": 36,
+            "end": 42
+          },
+          "snippet": "  platform:\n    build: ./platform\n    image: litellm-gateway-platform:0.1.0\n    ports:\n      - \"8000:8000\"\n    volumes:\n      - ./platform/definitions:/srv/definitions:ro"
+        }
+      ]
+    },
+    {
+      "id": "S2",
+      "focusIds": [
+        "F4"
+      ],
+      "title": "Mensajes enormes y checks de salud",
+      "situation": "Supongamos que un cliente con clave válida envía, de forma repetida, mensajes de 200 000 caracteres sin ninguna `@`, mientras otros usuarios hacen peticiones normales.",
+      "prompt": "¿Qué crees que pasa con el patrón de email, el timeout de 2 s y el resto de peticiones? ¿Lo aceptarías en esta entrega?",
+      "evidence": [
+        {
+          "kind": "config",
+          "file": "platform/definitions/definitions.yaml",
+          "lines": {
+            "start": 27,
+            "end": 34
+          },
+          "snippet": "  - name: email-mask\n    engine: regex\n    order: 30\n    config:\n      patterns:\n        - '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}'\n      action: mask\n      placeholder: '[EMAIL_MASKED]'"
+        },
+        {
+          "kind": "code",
+          "file": "gateway/platform_adapter.py",
+          "lines": {
+            "start": 20,
+            "end": 20
+          },
+          "snippet": "TIMEOUT_SECONDS = 2.0"
+        },
+        {
+          "kind": "code",
+          "file": "platform/guardrail_platform/main.py",
+          "lines": {
+            "start": 70,
+            "end": 75
+          },
+          "snippet": "@app.post(\"/v1/check\", dependencies=[Depends(require_token)])\ndef check(body: CheckRequest, request: Request) -> Decision:\n    # A plain def: FastAPI runs it in a worker thread, so CPU-bound regex work does not block /health.\n    result = evaluate(request.app.state.definitions, body.messages)\n    logger.info(\"check decision=%s acted=%s\", result[\"decision\"], [entry[\"name\"] for entry in result[\"acted\"]])\n    return result"
+        }
+      ]
+    }
+  ]
+}

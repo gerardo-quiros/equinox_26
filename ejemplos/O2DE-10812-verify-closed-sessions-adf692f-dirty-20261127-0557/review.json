@@ -1,0 +1,641 @@
+{
+  "schemaVersion": "1.1",
+  "meta": {
+    "reviewId": "O2DE-10812-verify-closed-sessions-adf692f-dirty-20261127-0557",
+    "project": "novum-authentication-service",
+    "title": "Merge branch 'main' into O2DE-10812-verify-closed-sessions",
+    "missionName": "El inventario de sesiones",
+    "summary": "La rama expone `getAllUserSessions` en Sessions v2, añade el DTO `UserSession` y conecta la operación con el repositorio mediante un nuevo caso de uso. Hay pruebas de aislamiento por usuario y mapeo de campos, pero conviene revisar la semántica de «activas», el contrato observable y la cobertura de sesiones cerradas o caducadas; no hay especificaciones asociadas.",
+    "generatedAt": "2026-11-27T04:57:21.813Z",
+    "source": {
+      "type": "branch",
+      "base": "main",
+      "head": "O2DE-10812-verify-closed-sessions",
+      "mergeBase": "f52d0fbbc4eb9e87965d6ae55a319cb5f18cf5b4",
+      "commit": "adf692f3fdf14aae0e1eba6fb6c507e23b97efb8",
+      "dirty": true,
+      "repoUrl": "https://github.com/Telefonica/novum-authentication-service",
+      "published": true
+    },
+    "stats": {
+      "filesChanged": 12,
+      "additions": 960,
+      "deletions": 0
+    }
+  },
+  "study": {
+    "chronicle": {
+      "title": "El inventario de sesiones",
+      "text": "La rama añade al contrato Sessions v2 una operación para obtener las sesiones de un usuario y un modelo `UserSession` con identificador, instalación y fechas. La implementación delega en `GetAllUserSessionsUseCase`, transforma cada modelo de dominio a DTO y añade una prueba de integración para varios dispositivos y otra para aislar usuarios."
+    },
+    "map": {
+      "flow": [
+        {
+          "label": "Sessions.getAllUserSessions",
+          "detail": "El consumidor envía un `userId` al nuevo método de Sessions v2.",
+          "ref": {
+            "file": "idl/Sessions.v2.idl.java",
+            "lines": {
+              "start": 54,
+              "end": 59
+            }
+          }
+        },
+        {
+          "label": "SessionsServiceImpl.getAllUserSessions",
+          "detail": "La frontera invoca el caso de uso y convierte cada sesión a DTO.",
+          "ref": {
+            "file": "src/main/kotlin/com/tuenti/services/auth/sessions/boundaries/service/SessionsServiceImpl.kt",
+            "lines": {
+              "start": 90,
+              "end": 98
+            }
+          }
+        },
+        {
+          "label": "GetAllUserSessionsUseCase",
+          "detail": "El caso de uso consulta el repositorio por el identificador interno del usuario.",
+          "ref": {
+            "file": "src/main/kotlin/com/tuenti/services/auth/sessions/usecase/GetAllUserSessionsUseCase.kt",
+            "lines": {
+              "start": 7,
+              "end": 11
+            }
+          }
+        },
+        {
+          "label": "SessionRepository.findByUserId",
+          "detail": "El repositorio devuelve los modelos de sesión que corresponden al usuario.",
+          "ref": {
+            "file": "src/main/kotlin/com/tuenti/services/auth/sessions/usecase/GetAllUserSessionsUseCase.kt",
+            "lines": {
+              "start": 10,
+              "end": 11
+            }
+          }
+        }
+      ],
+      "components": [
+        {
+          "name": "Sessions.v2.idl.java",
+          "role": "Contrato RPC",
+          "detail": "Declara la operación y el DTO de salida `UserSession`.",
+          "ref": {
+            "file": "idl/Sessions.v2.idl.java",
+            "lines": {
+              "start": 54,
+              "end": 59
+            }
+          }
+        },
+        {
+          "name": "SessionsServiceImpl",
+          "role": "Frontera",
+          "detail": "Expone la operación y adapta el modelo de dominio al contrato.",
+          "ref": {
+            "file": "src/main/kotlin/com/tuenti/services/auth/sessions/boundaries/service/SessionsServiceImpl.kt",
+            "lines": {
+              "start": 90,
+              "end": 98
+            }
+          }
+        },
+        {
+          "name": "GetAllUserSessionsUseCase",
+          "role": "Caso de uso",
+          "detail": "Centraliza la consulta de sesiones por usuario.",
+          "ref": {
+            "file": "src/main/kotlin/com/tuenti/services/auth/sessions/usecase/GetAllUserSessionsUseCase.kt"
+          }
+        },
+        {
+          "name": "SessionsServiceImplIntegrationTest",
+          "role": "Integración",
+          "detail": "Comprueba varias sesiones del usuario y que no se mezclen otros usuarios.",
+          "ref": {
+            "file": "src/test/kotlin/integration/com/tuenti/services/auth/sessions/boundaries/service/SessionsServiceImplIntegrationTest.kt"
+          }
+        }
+      ],
+      "models": [
+        {
+          "name": "UserSession",
+          "role": "DTO de salida",
+          "detail": "Representa una sesión expuesta por Sessions v2.",
+          "fields": [
+            "sessionId",
+            "installationId",
+            "createdAt",
+            "updatedAt"
+          ],
+          "ref": {
+            "file": "idl/Sessions.v2.idl.java",
+            "lines": {
+              "start": 151,
+              "end": 156
+            }
+          }
+        },
+        {
+          "name": "Session",
+          "role": "Modelo interno",
+          "detail": "Modelo de dominio que se transforma a `UserSession`.",
+          "fields": [
+            "id",
+            "installationId",
+            "createdAt",
+            "updatedAt"
+          ],
+          "ref": {
+            "file": "src/main/kotlin/com/tuenti/services/auth/sessions/boundaries/service/SessionsServiceImpl.kt",
+            "lines": {
+              "start": 93,
+              "end": 98
+            }
+          }
+        }
+      ],
+      "decisions": [
+        {
+          "title": "Delegación sin lógica en la frontera",
+          "detail": "La implementación deja la búsqueda en un caso de uso y limita la frontera al mapeo del DTO.",
+          "ref": {
+            "file": "src/main/kotlin/com/tuenti/services/auth/sessions/boundaries/service/SessionsServiceImpl.kt",
+            "lines": {
+              "start": 90,
+              "end": 98
+            },
+            "snippet": "    override suspend fun getAllUserSessions(userId: Long): List<UserSession> =\n        getAllUserSessionsUseCase(userId).map { session -> session.toDto() }\n\n    private fun Session.toDto(): UserSession = UserSession(\n        sessionId = id.toString(),\n        installationId = installationId,\n        createdAt = createdAt,\n        updatedAt = updatedAt,\n    )"
+          }
+        },
+        {
+          "title": "Contrato nuevo en la versión 2",
+          "detail": "La operación se añade a Sessions v2 sin tocar los métodos legacy.",
+          "focusIds": [
+            "F1"
+          ],
+          "ref": {
+            "file": "idl/Sessions.v2.idl.java",
+            "lines": {
+              "start": 54,
+              "end": 62
+            }
+          }
+        }
+      ],
+      "edgeCases": [
+        {
+          "title": "Sesiones cerradas o caducadas",
+          "detail": "El nombre del contrato habla de sesiones activas, pero el flujo mostrado solo delega en `findByUserId`; hay que confirmar que el repositorio filtra esos estados.",
+          "focusIds": [
+            "F2",
+            "F3"
+          ],
+          "ref": {
+            "file": "src/main/kotlin/com/tuenti/services/auth/sessions/usecase/GetAllUserSessionsUseCase.kt",
+            "lines": {
+              "start": 10,
+              "end": 11
+            },
+            "snippet": "    suspend operator fun invoke(userId: Long): List<Session> =\n        sessionRepository.findByUserId(userId)"
+          }
+        },
+        {
+          "title": "Usuario sin sesiones",
+          "detail": "La prueba de integración espera una lista vacía cuando no existen sesiones para el usuario consultado.",
+          "ref": {
+            "file": "src/test/kotlin/integration/com/tuenti/services/auth/sessions/boundaries/service/SessionsServiceImplIntegrationTest.kt",
+            "lines": {
+              "start": 51,
+              "end": 58
+            }
+          }
+        }
+      ],
+      "tests": [
+        {
+          "name": "SessionsServiceImplIntegrationTest",
+          "detail": "Cubre dos sesiones del mismo usuario y exclusión de sesiones de otro usuario.",
+          "cases": 2,
+          "ref": {
+            "file": "src/test/kotlin/integration/com/tuenti/services/auth/sessions/boundaries/service/SessionsServiceImplIntegrationTest.kt"
+          }
+        },
+        {
+          "name": "SessionsServiceImplUnitTest",
+          "detail": "Actualiza la inyección del nuevo caso de uso, sin añadir una prueba específica del método nuevo.",
+          "ref": {
+            "file": "src/test/kotlin/unit/com/tuenti/services/auth/sessions/boundaries/service/SessionsServiceImplUnitTest.kt",
+            "lines": {
+              "start": 59,
+              "end": 64
+            }
+          }
+        }
+      ]
+    },
+    "teachings": [
+      {
+        "title": "El contrato dice activas",
+        "text": "La descripción IDL promete todas las sesiones activas. Para verificar el comportamiento real hay que seguir la consulta del repositorio y comprobar qué estados excluye.",
+        "focusIds": [
+          "F2"
+        ],
+        "ref": {
+          "file": "idl/Sessions.v2.idl.java",
+          "lines": {
+            "start": 54,
+            "end": 59
+          },
+          "snippet": "\t/**\n\t * Returns all the active sessions of the given user.\n\t *\n\t * @param userId User identifier\n\t */\n\tUserSession[] getAllUserSessions(long userId);"
+        }
+      },
+      {
+        "title": "El mapeo conserva cuatro datos",
+        "text": "La frontera no expone el objeto de dominio completo: publica solo el identificador, la instalación y las dos marcas temporales definidas por el DTO.",
+        "ref": {
+          "file": "src/main/kotlin/com/tuenti/services/auth/sessions/boundaries/service/SessionsServiceImpl.kt",
+          "lines": {
+            "start": 93,
+            "end": 98
+          },
+          "snippet": "    private fun Session.toDto(): UserSession = UserSession(\n        sessionId = id.toString(),\n        installationId = installationId,\n        createdAt = createdAt,\n        updatedAt = updatedAt,\n    )"
+        }
+      },
+      {
+        "title": "La prueba de aislamiento es explícita",
+        "text": "La integración crea una sesión de otro usuario y consulta un usuario sin sesiones; este caso confirma que la respuesta no mezcla registros entre usuarios.",
+        "ref": {
+          "file": "src/test/kotlin/integration/com/tuenti/services/auth/sessions/boundaries/service/SessionsServiceImplIntegrationTest.kt",
+          "lines": {
+            "start": 51,
+            "end": 58
+          }
+        }
+      }
+    ]
+  },
+  "focuses": [
+    {
+      "id": "F1",
+      "type": "change",
+      "priority": "medium",
+      "title": "Nuevo contrato de Sessions v2",
+      "why": "La API pública añade una operación y un DTO con cuatro campos. Conviene confirmar que el nombre, la semántica y la forma de fechas son compatibles con todos los consumidores de Sessions v2.",
+      "evidence": [
+        {
+          "kind": "code",
+          "file": "idl/Sessions.v2.idl.java",
+          "lines": {
+            "start": 54,
+            "end": 59
+          },
+          "snippet": "\t/**\n\t * Returns all the active sessions of the given user.\n\t *\n\t * @param userId User identifier\n\t */\n\tUserSession[] getAllUserSessions(long userId);"
+        },
+        {
+          "kind": "code",
+          "file": "idl/Sessions.v2.idl.java",
+          "lines": {
+            "start": 151,
+            "end": 156
+          },
+          "snippet": "class UserSession {\n\tString sessionId;\n\tString installationId;\n\tInstant createdAt;\n\tInstant updatedAt;\n}"
+        }
+      ]
+    },
+    {
+      "id": "F2",
+      "type": "requirement-gap",
+      "priority": "high",
+      "title": "La consulta debe devolver solo sesiones activas",
+      "why": "El contrato especifica sesiones activas, pero el cambio visible delega directamente en `findByUserId` y no muestra ningún filtro de estado. Hay que confirmar en la implementación del repositorio que una sesión cerrada o caducada no pueda aparecer.",
+      "evidence": [
+        {
+          "kind": "code",
+          "file": "idl/Sessions.v2.idl.java",
+          "lines": {
+            "start": 54,
+            "end": 59
+          },
+          "snippet": "\t/**\n\t * Returns all the active sessions of the given user.\n\t *\n\t * @param userId User identifier\n\t */\n\tUserSession[] getAllUserSessions(long userId);"
+        },
+        {
+          "kind": "code",
+          "file": "src/main/kotlin/com/tuenti/services/auth/sessions/usecase/GetAllUserSessionsUseCase.kt",
+          "lines": {
+            "start": 10,
+            "end": 10
+          },
+          "snippet": "    suspend operator fun invoke(userId: Long): List<Session> ="
+        }
+      ]
+    },
+    {
+      "id": "F3",
+      "type": "test-gap",
+      "priority": "medium",
+      "title": "Faltan pruebas de ciclo de vida y orden",
+      "why": "Las pruebas cubren sesiones creadas y aislamiento por usuario, pero no ejercitan una sesión cerrada o caducada ni fijan el orden de la respuesta. Esos casos pueden cambiar la interpretación de «activas» o producir respuestas inestables para consumidores.",
+      "evidence": [
+        {
+          "kind": "test",
+          "file": "src/test/kotlin/integration/com/tuenti/services/auth/sessions/boundaries/service/SessionsServiceImplIntegrationTest.kt",
+          "lines": {
+            "start": 36,
+            "end": 36
+          },
+          "snippet": "    fun NioTestScope.`getAllUserSessions returns all the sessions of the user`() = request {"
+        }
+      ]
+    }
+  ],
+  "flashcards": [
+    {
+      "id": "C1",
+      "focusIds": [
+        "F1"
+      ],
+      "front": "¿Qué datos expone el nuevo DTO `UserSession`?",
+      "title": "Identificador, instalación y fechas",
+      "back": "Expone `sessionId`, `installationId`, `createdAt` y `updatedAt`. La implementación convierte `Session.id` a texto y copia los otros tres valores.",
+      "evidence": [
+        {
+          "kind": "code",
+          "file": "idl/Sessions.v2.idl.java",
+          "lines": {
+            "start": 151,
+            "end": 156
+          },
+          "snippet": "class UserSession {\n\tString sessionId;\n\tString installationId;\n\tInstant createdAt;\n\tInstant updatedAt;\n}"
+        }
+      ]
+    },
+    {
+      "id": "C2",
+      "focusIds": [
+        "F2"
+      ],
+      "front": "¿Qué componente decide qué sesiones devuelve la nueva operación?",
+      "title": "El repositorio",
+      "back": "El caso de uso no filtra por sí mismo: llama a `sessionRepository.findByUserId(userId)`. Por eso la semántica de «activas» depende de esa consulta y merece verificarse allí.",
+      "evidence": [
+        {
+          "kind": "code",
+          "file": "src/main/kotlin/com/tuenti/services/auth/sessions/usecase/GetAllUserSessionsUseCase.kt",
+          "lines": {
+            "start": 10,
+            "end": 11
+          },
+          "snippet": "    suspend operator fun invoke(userId: Long): List<Session> =\n        sessionRepository.findByUserId(userId)"
+        }
+      ]
+    },
+    {
+      "id": "C3",
+      "focusIds": [
+        "F3"
+      ],
+      "front": "¿Qué casos cubren las nuevas pruebas de integración?",
+      "title": "Dos sesiones y aislamiento",
+      "back": "Comprueban que se devuelven dos sesiones del mismo usuario y que una sesión de otro usuario no aparece. No comprueban estados cerrados o caducados ni fijan el orden, porque convierten la respuesta a `Set`.",
+      "evidence": [
+        {
+          "kind": "test",
+          "file": "src/test/kotlin/integration/com/tuenti/services/auth/sessions/boundaries/service/SessionsServiceImplIntegrationTest.kt",
+          "lines": {
+            "start": 35,
+            "end": 48
+          },
+          "snippet": "    @Test\n    fun NioTestScope.`getAllUserSessions returns all the sessions of the user`() = request {\n        val firstSessionId = sessionRepository.create(aSessionCreation(USER_WITH_SESSIONS, \"installation-1\"))\n        val secondSessionId = sessionRepository.create(aSessionCreation(USER_WITH_SESSIONS, \"installation-2\"))\n\n        val userSessions = sessions.getAllUserSessions(USER_WITH_SESSIONS)\n\n        assertEquals(\n            setOf(\n                UserSession(firstSessionId.toString(), \"installation-1\", SOME_CREATED_AT, SOME_CREATED_AT),\n                UserSession(secondSessionId.toString(), \"installation-2\", SOME_CREATED_AT, SOME_CREATED_AT),\n            ),\n            userSessions.toSet(),\n        )"
+        }
+      ]
+    }
+  ],
+  "quiz": [
+    {
+      "id": "Q1",
+      "focusIds": [
+        "F2"
+      ],
+      "kind": "single",
+      "title": "Semántica de la consulta",
+      "prompt": "¿Dónde se decide, según el código añadido, qué sesiones pertenecen al resultado de `getAllUserSessions`?",
+      "options": [
+        {
+          "id": "a",
+          "text": "En `Session.toDto()`",
+          "why": "`toDto()` solo copia campos y no decide qué sesiones entran en la lista."
+        },
+        {
+          "id": "b",
+          "text": "En `SessionRepository.findByUserId`",
+          "detail": "El caso de uso delega en una consulta del repositorio."
+        },
+        {
+          "id": "c",
+          "text": "En el IDL de Sessions v2",
+          "why": "El IDL declara el contrato, pero no ejecuta el filtrado."
+        },
+        {
+          "id": "d",
+          "text": "En `SessionsServiceImpl` mediante un filtro local",
+          "why": "La implementación hace `map` sobre el resultado del caso de uso y no aplica un filtro."
+        }
+      ],
+      "correct": [
+        "b"
+      ],
+      "explanation": "El caso de uso devuelve directamente el resultado de `sessionRepository.findByUserId(userId)`. Para saber si solo son activas hay que inspeccionar esa consulta.",
+      "evidence": [
+        {
+          "kind": "code",
+          "file": "src/main/kotlin/com/tuenti/services/auth/sessions/usecase/GetAllUserSessionsUseCase.kt",
+          "lines": {
+            "start": 10,
+            "end": 11
+          },
+          "snippet": "    suspend operator fun invoke(userId: Long): List<Session> =\n        sessionRepository.findByUserId(userId)"
+        }
+      ]
+    },
+    {
+      "id": "Q2",
+      "focusIds": [
+        "F1"
+      ],
+      "kind": "single",
+      "title": "Campos del contrato",
+      "prompt": "¿Cuál de estos campos forma parte de `UserSession`?",
+      "options": [
+        {
+          "id": "a",
+          "text": "`externalAccessToken`",
+          "why": "El nuevo DTO no expone tokens externos."
+        },
+        {
+          "id": "b",
+          "text": "`installationId`",
+          "detail": "El DTO identifica la instalación asociada a la sesión."
+        },
+        {
+          "id": "c",
+          "text": "`userId`",
+          "why": "El usuario se usa como parámetro de búsqueda, pero no aparece como campo del DTO."
+        },
+        {
+          "id": "d",
+          "text": "`flowId`",
+          "why": "El flujo pertenece al modelo de creación, no al DTO declarado en este cambio."
+        }
+      ],
+      "correct": [
+        "b"
+      ],
+      "explanation": "`UserSession` contiene `sessionId`, `installationId`, `createdAt` y `updatedAt`.",
+      "evidence": [
+        {
+          "kind": "code",
+          "file": "idl/Sessions.v2.idl.java",
+          "lines": {
+            "start": 151,
+            "end": 156
+          },
+          "snippet": "class UserSession {\n\tString sessionId;\n\tString installationId;\n\tInstant createdAt;\n\tInstant updatedAt;\n}"
+        }
+      ]
+    },
+    {
+      "id": "Q3",
+      "focusIds": [
+        "F3"
+      ],
+      "kind": "multiple",
+      "title": "Cobertura existente",
+      "prompt": "¿Qué dos comportamientos comprueban las pruebas de integración añadidas?",
+      "options": [
+        {
+          "id": "a",
+          "text": "Devuelven dos sesiones del mismo usuario",
+          "detail": "Se crean dos sesiones con instalaciones distintas."
+        },
+        {
+          "id": "b",
+          "text": "Excluyen una sesión de otro usuario",
+          "detail": "Se consulta un usuario que no tiene sesiones propias."
+        },
+        {
+          "id": "c",
+          "text": "Excluyen una sesión cerrada",
+          "why": "No se crea ni se cierra ninguna sesión en las pruebas añadidas."
+        },
+        {
+          "id": "d",
+          "text": "Conservan un orden contractual",
+          "why": "La aserción convierte el resultado a `Set` y no verifica orden."
+        }
+      ],
+      "correct": [
+        "a",
+        "b"
+      ],
+      "explanation": "La primera prueba comprueba dos sesiones del usuario y la segunda que una sesión de otro usuario no se devuelva.",
+      "evidence": [
+        {
+          "kind": "test",
+          "file": "src/test/kotlin/integration/com/tuenti/services/auth/sessions/boundaries/service/SessionsServiceImplIntegrationTest.kt",
+          "lines": {
+            "start": 36,
+            "end": 36
+          },
+          "snippet": "    fun NioTestScope.`getAllUserSessions returns all the sessions of the user`() = request {"
+        }
+      ]
+    },
+    {
+      "id": "Q4",
+      "focusIds": [
+        "F2",
+        "F3"
+      ],
+      "kind": "single",
+      "title": "Sesión cerrada",
+      "prompt": "Si el repositorio conserva una fila después de cerrar una sesión, ¿qué debería comprobar una prueba antes de aceptar esta operación?",
+      "options": [
+        {
+          "id": "a",
+          "text": "Que la sesión cerrada también se devuelve para facilitar auditoría",
+          "why": "El contrato describe sesiones activas, no el historial completo."
+        },
+        {
+          "id": "b",
+          "text": "Que la sesión cerrada no aparece en el resultado",
+          "detail": "La prueba debe conectar el comportamiento del repositorio con la palabra «activas»."
+        },
+        {
+          "id": "c",
+          "text": "Que el DTO incluya el token de refresco",
+          "why": "El contrato de `UserSession` no incluye tokens."
+        }
+      ],
+      "correct": [
+        "b"
+      ],
+      "explanation": "La operación se documenta como inventario de sesiones activas; una sesión cerrada debería quedar fuera si el almacenamiento la conserva.",
+      "evidence": [
+        {
+          "kind": "code",
+          "file": "idl/Sessions.v2.idl.java",
+          "lines": {
+            "start": 54,
+            "end": 59
+          },
+          "snippet": "\t/**\n\t * Returns all the active sessions of the given user.\n\t *\n\t * @param userId User identifier\n\t */\n\tUserSession[] getAllUserSessions(long userId);"
+        }
+      ]
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "S1",
+      "focusIds": [
+        "F2",
+        "F3"
+      ],
+      "title": "El cierre compite con la consulta",
+      "situation": "Un cliente consulta las sesiones de un usuario mientras otro flujo cierra una de ellas. El repositorio puede leer antes o después de confirmar el cierre.",
+      "prompt": "¿Qué resultado esperarías en cada orden de operaciones y qué comportamiento aceptarías como contrato para evitar sorpresas?",
+      "evidence": [
+        {
+          "kind": "code",
+          "file": "src/main/kotlin/com/tuenti/services/auth/sessions/usecase/GetAllUserSessionsUseCase.kt",
+          "lines": {
+            "start": 10,
+            "end": 11
+          },
+          "snippet": "    suspend operator fun invoke(userId: Long): List<Session> =\n        sessionRepository.findByUserId(userId)"
+        }
+      ]
+    },
+    {
+      "id": "S2",
+      "focusIds": [
+        "F1",
+        "F3"
+      ],
+      "title": "Consumidor que necesita orden estable",
+      "situation": "Un cliente muestra la primera sesión como dispositivo principal y procesa las siguientes como dispositivos secundarios. La consulta devuelve varias sesiones, pero el orden de `findByUserId` no está documentado en el cambio.",
+      "prompt": "¿Aceptarías que el orden cambie entre llamadas? ¿Qué evidencia pedirías sobre el contrato o la implementación antes de fusionar?",
+      "evidence": [
+        {
+          "kind": "test",
+          "file": "src/test/kotlin/integration/com/tuenti/services/auth/sessions/boundaries/service/SessionsServiceImplIntegrationTest.kt",
+          "lines": {
+            "start": 42,
+            "end": 48
+          },
+          "snippet": "        assertEquals(\n            setOf(\n                UserSession(firstSessionId.toString(), \"installation-1\", SOME_CREATED_AT, SOME_CREATED_AT),\n                UserSession(secondSessionId.toString(), \"installation-2\", SOME_CREATED_AT, SOME_CREATED_AT),\n            ),\n            userSessions.toSet(),\n        )"
+        }
+      ]
+    }
+  ]
+}

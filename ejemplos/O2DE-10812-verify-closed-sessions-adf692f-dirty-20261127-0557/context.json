@@ -1,0 +1,153 @@
+{
+  "reviewId": "O2DE-10812-verify-closed-sessions-adf692f-dirty-20261127-0557",
+  "generatedAt": "2026-11-27T04:57:21.813Z",
+  "root": "/home/id04612/dev/novum-authentication-service",
+  "project": "novum-authentication-service",
+  "head": {
+    "name": "O2DE-10812-verify-closed-sessions",
+    "sha": "adf692f3fdf14aae0e1eba6fb6c507e23b97efb8"
+  },
+  "base": {
+    "name": "main",
+    "ref": "origin/main",
+    "source": "origin/HEAD"
+  },
+  "mergeBase": "f52d0fbbc4eb9e87965d6ae55a319cb5f18cf5b4",
+  "dirty": true,
+  "repoUrl": "https://github.com/Telefonica/novum-authentication-service",
+  "published": true,
+  "lastCommitSubject": "Merge branch 'main' into O2DE-10812-verify-closed-sessions",
+  "commits": [
+    {
+      "sha": "adf692f",
+      "subject": "Merge branch 'main' into O2DE-10812-verify-closed-sessions"
+    },
+    {
+      "sha": "10e8b3c",
+      "subject": "Merge branch 'main' into O2DE-10812-verify-closed-sessions"
+    },
+    {
+      "sha": "7579a30",
+      "subject": "O2DE-10812 expose getAllUserSessions in Sessions v2"
+    }
+  ],
+  "stats": {
+    "filesChanged": 12,
+    "additions": 960,
+    "deletions": 0
+  },
+  "files": [
+    {
+      "path": "get_external_token_info_spec.json",
+      "status": "added",
+      "additions": 370,
+      "deletions": 0
+    },
+    {
+      "path": ".factorypath",
+      "status": "added",
+      "additions": 349,
+      "deletions": 0
+    },
+    {
+      "path": "src/test/kotlin/integration/com/tuenti/services/auth/sessions/boundaries/service/SessionsServiceImplIntegrationTest.kt",
+      "status": "added",
+      "additions": 83,
+      "deletions": 0
+    },
+    {
+      "path": ".classpath",
+      "status": "added",
+      "additions": 71,
+      "deletions": 0
+    },
+    {
+      "path": ".project",
+      "status": "added",
+      "additions": 34,
+      "deletions": 0
+    },
+    {
+      "path": "idl/Sessions.v2.idl.java",
+      "status": "modified",
+      "additions": 14,
+      "deletions": 0
+    },
+    {
+      "path": "src/main/kotlin/com/tuenti/services/auth/sessions/boundaries/service/SessionsServiceImpl.kt",
+      "status": "modified",
+      "additions": 14,
+      "deletions": 0
+    },
+    {
+      "path": ".settings/org.eclipse.jdt.core.prefs",
+      "status": "added",
+      "additions": 9,
+      "deletions": 0
+    },
+    {
+      "path": "src/test/kotlin/unit/com/tuenti/services/auth/sessions/boundaries/service/SessionsServiceImplUnitTest.kt",
+      "status": "modified",
+      "additions": 4,
+      "deletions": 0
+    },
+    {
+      "path": ".settings/org.eclipse.core.resources.prefs",
+      "status": "added",
+      "additions": 4,
+      "deletions": 0
+    },
+    {
+      "path": ".settings/org.eclipse.jdt.apt.core.prefs",
+      "status": "added",
+      "additions": 4,
+      "deletions": 0
+    },
+    {
+      "path": ".settings/org.eclipse.m2e.core.prefs",
+      "status": "added",
+      "additions": 4,
+      "deletions": 0
+    }
+  ],
+  "excluded": [],
+  "largeDiff": false,
+  "specs": [],
+  "conventions": [
+    {
+      "path": "CLAUDE.md",
+      "content": "# AGENTS.md\n\nThis file provides guidance to AI Agents when working with code in this repository.\n\n## Commands\n\nStart the environment first:\n\n```bash\n./dev-env.sh up-local-db    # Start MySQL in Docker\nmvn clean                   # Clean target directory\n```\n\nThen build and test:\n\n```bash\nmvn compile -Pxconfig-java -Dplatform-linter.detekt-skip=true -DskipTests # Just compiling\nmvn test -Pxconfig-java -Dplatform-linter.detekt-skip=true # Run all tests\nmvn test -Pxconfig-java -Dplatform-linter.detekt-skip=true -Dtest=\"TestFile#test name\" # Run a single test method\n```\n\nIf there are changes in .IDL.java files, the TService client/server stubs should be regenerated with:\n\n```bash\nmvn com.tuenti.maven.plugins:tservice-maven-plugin:generate\n```\n\nAuto-linting can be run with:\n\n```bash\nmvn detekt:check\n```\n\n## Architecture\n\nThis is a **Kotlin + TService** (Tuenti internal RPC framework) service built on top of the internal `platform-*` library stack. It uses CDI (`@Inject`, `@ApplicationScoped`) and exposes interfaces via `@TServiceExport`. HTTP clients are generated from IDL files at compile time into `target/generated-sources`.\n\n### Module breakdown\n\nAll source lives under `com.tuenti.services.auth`:\n\n- **`oidcflow`** — Low-level OIDC flow engine. The main entry point is `OidcFlowService` (IDL: `OidcFlowService.idl.java`). Use cases in `oidcflow/application/usecase` orchestrate init, token request, refresh, introspection, and revocation flows. Flow configuration (auth server URL, client_id, scopes, etc.) lives in YAML config consumed via xconfig.\n\n- **`login`** — High-level Novum app login. `LoginMigrationService` and `LoginAgent` (IDL-generated) handle the app's authentication lifecycle. Domain logic for access policy rules, user profiles, and user ID resolution lives in `login/domain`. Uses `oidcflow` internally.\n\n- **`sessions`** — Session storage and migration. Manages the migration from kernel (login-4p) sessions to OB sessions. The `sessions/domain/migration` subtree contains the cron-driven migration jobs (`SessionsMigrationCron`, `SessionsMigrationJob`) and migration strategies for CIAM and VivoOAM. Storage adapters for sessions and user mappings are in `sessions/domain/storage`.\n\n- **`escalation`** — Light escalation flow. `EscalationAgent` (IDL-generated) manages privilege-escalation use cases. Strategies live in `escalation/domain/strategy`.\n\n- **`datamanager`** — User data deletion. Implements `AuthenticationServiceUserDataManager` for GDPR-style data removal.\n\n- **`externalsession`** — External session config provider (IDL-generated).\n\n- **`breeds`** — Multi-brand / multi-OB constraint resolution (`BreedConstraintsConfig`).\n\n- **`common`** — Shared utilities: JWT parsing/validation (`common/jwt`), feedback model (`common/feedback`).\n\n### Layer convention\n\nEach module follows a consistent layering:\n\n```\nboundaries/service/   — TService interface implementations (entry points)\nboundaries/client/    — Generated TService/REST client stubs (do not edit)\ndomain/               — Business logic, domain models, use-case orchestration\nusecase/              — Application-level use cases called by boundary layer\n```\n\nIDL files (in `idl/`) define the TService contracts; generated stubs land in `target/generated-sources` after `mvn generate-sources`.\n\n### Test structure\n\nTests are split across three source roots under `src/test/kotlin`:\n\n- `unit/` — Pure unit tests with MockK; no infrastructure required.\n- `integration/` — Integration tests using Testcontainers (Keycloak via `testcontainers-keycloak`, MySQL). Base class: `BaseKeycloakIntegrationTest`.\n- `acceptance/` — End-to-end acceptance tests using the TService test harness (`TKotlinAcceptanceTest`, `NioTestExtension`) with WireMock for downstream stubs.\n\nIntegration tests require the Docker dev environment running with MySQL available at `mysql:3306` (configured in `testEnvironment.properties`).\n\nHints:\n * Integration tests preferred over unit tests, avoid mock-only unit tests.\n * Use one assertEquals per test method for clarity, avoid multiple assertions for a single object.\n\n### Key dependencies\n\n- **TService / platform-\\*** — Internal Tuenti/Telefonica RPC and platform library ecosystem.\n- **Nimbus JOSE+JWT** — JWT creation and validation.\n- **Kotlin Coroutines + RxJava 3** — Async/reactive execution model throughout.\n- **Caffeine** — In-memory caching.\n- **kotlinx-serialization** — JSON serialization (alongside Jackson for legacy paths).\n- **xconfig** — Internal YAML-based configuration system (replaces Spring/Quarkus config).\n",
+      "truncated": false
+    },
+    {
+      "path": "README.md",
+      "content": "# 🔑 novum-authentication-service\nThis service implements all the authentication needs that for the Novum project, it exposes lower level and higher level interfaces to execute authentication flows with other parties.\n\n## OidcFlowService\nLow level interface that allows authentication with third parties authorization servers following OpenId Connect (OIDC) standard. The service exposes a low friction, don't repeat yourself interface, with an abstraction over the standard, thanks to the local configuration of the flow, allowing clients to have a more focused code on its use-case without boiler plate code.\n\nThe main concept managed by this interface is the \"Authentication Flow\", by its ID. That correlates the authentication to execute with the service configuration that contains information about the authentication server, the application in the authentication server (this is a OIDC concept, represented by the client_id) and detail of the authentication type like scopes, purposes or claims that will be requested to the authorization server, etc. By having all this in service YAML configuration, the client of this service can just refer to the flow identifier and don't have to maintain all the information about credentials, authorization server endpoints or any other configuration, that most of the time is shared with other authentication flows (most of our flows would run towards Kernel authentication server, so all its information can be shared).\n\nRelated documentation:\n * [Tech Spec](https://confluence.tid.es/pages/viewpage.action?pageId=189959060)\n * [OIDC Core Spec](https://openid.net/specs/openid-connect-core-1_0.html)\n * [OIDC Discovery Spec](https://openid.net/specs/openid-connect-discovery-1_0.html)\n * [Kernel Consuming APIs](https://developers.baikalplatform.com/docs/latest/apis/api-access/)\n\n## TBD\nA replacing interface for login-4p service replacement will be implemented in this service, its interface is still pending to be defined.\n\n## Known usages\n * `admin_code` retrieval to interact with Living Apps in the Home Network.\n * TBD: login-4p\n\n## Documentation\nIf you are looking for documentation about [development](docs/index.md#development), [usage](docs/index.md#usage) or [operation](docs/index.md#operation) of the service, check our [index of documentation](docs/index.md), where we have extensive documentation about all these topics and references to its context.\n\n## Collaboration\nThis service belong to [Platform Core Team](https://confluence.tid.es/pages/viewpage.action?pageId=141016435), we are open to PRs for any improvement, but we recommend you to first comment with us in our [Teams channel](https://teams.microsoft.com/l/channel/19%3a5e6ba82f47ca477b8eb31a9e3d0c0e55%40thread.skype/Server%2520Core?groupId=bef9be07-03e4-4afb-8a79-f720a63e4c28&tenantId=9744600e-3e04-492e-baa1-25ec245c6f10) the proposed change ;-).\n",
+      "truncated": false
+    }
+  ],
+  "warnings": [
+    "No hay especificaciones: la revisión se basa en el diff y en las convenciones del proyecto."
+  ],
+  "metaDraft": {
+    "reviewId": "O2DE-10812-verify-closed-sessions-adf692f-dirty-20261127-0557",
+    "project": "novum-authentication-service",
+    "title": "Merge branch 'main' into O2DE-10812-verify-closed-sessions",
+    "summary": "(pendiente: 1–2 frases sobre qué hace el cambio)",
+    "generatedAt": "2026-11-27T04:57:21.813Z",
+    "source": {
+      "type": "branch",
+      "base": "main",
+      "head": "O2DE-10812-verify-closed-sessions",
+      "mergeBase": "f52d0fbbc4eb9e87965d6ae55a319cb5f18cf5b4",
+      "commit": "adf692f3fdf14aae0e1eba6fb6c507e23b97efb8",
+      "dirty": true,
+      "repoUrl": "https://github.com/Telefonica/novum-authentication-service",
+      "published": true
+    },
+    "stats": {
+      "filesChanged": 12,
+      "additions": 960,
+      "deletions": 0
+    }
+  }
+}

@@ -1,0 +1,1083 @@
+diff --git a/idl/Sessions.v2.idl.java b/idl/Sessions.v2.idl.java
+index 68f755e..acbf212 100644
+--- a/idl/Sessions.v2.idl.java
++++ b/idl/Sessions.v2.idl.java
+@@ -51,6 +51,13 @@ interface Sessions {
+ 	 */
+ 	void closeSession(String sessionId);
+ 
++	/**
++	 * Returns all the active sessions of the given user.
++	 *
++	 * @param userId User identifier
++	 */
++	UserSession[] getAllUserSessions(long userId);
++
+ 	//=============================================================================================
+ 	// Legacy for backward compatibility methods
+ 	//=============================================================================================
+@@ -141,6 +148,13 @@ class UserIdRelation {
+ 	String externalUserId;
+ }
+ 
++class UserSession {
++	String sessionId;
++	String installationId;
++	Instant createdAt;
++	Instant updatedAt;
++}
++
+ /**
+  * Session of the user is expired and no longer exists, logout may be in progress concurrently.
+  * Note: Equivalent to old TokenNotFoundException
+diff --git a/src/main/kotlin/com/tuenti/services/auth/sessions/boundaries/service/SessionsServiceImpl.kt b/src/main/kotlin/com/tuenti/services/auth/sessions/boundaries/service/SessionsServiceImpl.kt
+index e6603f0..61255f1 100644
+--- a/src/main/kotlin/com/tuenti/services/auth/sessions/boundaries/service/SessionsServiceImpl.kt
++++ b/src/main/kotlin/com/tuenti/services/auth/sessions/boundaries/service/SessionsServiceImpl.kt
+@@ -7,13 +7,16 @@ import com.tuenti.services.auth.sessions.boundaries.service.v2.dto.CloseOptions
+ import com.tuenti.services.auth.sessions.boundaries.service.v2.dto.IdToken
+ import com.tuenti.services.auth.sessions.boundaries.service.v2.dto.RefreshToken
+ import com.tuenti.services.auth.sessions.boundaries.service.v2.dto.UserIdRelation
++import com.tuenti.services.auth.sessions.boundaries.service.v2.dto.UserSession
+ import com.tuenti.services.auth.sessions.boundaries.service.v2.exceptions.IdTokenNotFoundException
+ import com.tuenti.services.auth.sessions.boundaries.service.v2.serviceCodes
+ import com.tuenti.services.auth.sessions.domain.exception.ExpiredRefreshTokenException
+ import com.tuenti.services.auth.sessions.domain.model.ExternalAccessToken
++import com.tuenti.services.auth.sessions.domain.model.Session
+ import com.tuenti.services.auth.sessions.domain.model.SessionId
+ import com.tuenti.services.auth.sessions.usecase.CloseAllSessionsUseCase
+ import com.tuenti.services.auth.sessions.usecase.CloseSessionUseCase
++import com.tuenti.services.auth.sessions.usecase.GetAllUserSessionsUseCase
+ import com.tuenti.services.auth.sessions.usecase.GetExternalAccessTokenUseCase
+ import com.tuenti.services.auth.sessions.usecase.GetExternalRefreshTokenUseCase
+ import com.tuenti.services.auth.sessions.usecase.GetIdTokenUseCase
+@@ -39,6 +42,7 @@ class SessionsServiceImpl @Inject constructor(
+     private val getUserRelationByExternalUseCase: GetUserRelationByExternalUseCase,
+     private val closeSessionUseCase: CloseSessionUseCase,
+     private val closeAllSessionsUseCase: CloseAllSessionsUseCase,
++    private val getAllUserSessionsUseCase: GetAllUserSessionsUseCase,
+     private val sessionsCacheManager: SessionsCacheManager,
+     private val nativeFunctions: NativeFunctions,
+ ) : BaseServiceImplementation(), Sessions {
+@@ -83,6 +87,16 @@ class SessionsServiceImpl @Inject constructor(
+         closeAllSessionsUseCase(userId, closeOptions.force, closeOptions.reason)
+     }
+ 
++    override suspend fun getAllUserSessions(userId: Long): List<UserSession> =
++        getAllUserSessionsUseCase(userId).map { session -> session.toDto() }
++
++    private fun Session.toDto(): UserSession = UserSession(
++        sessionId = id.toString(),
++        installationId = installationId,
++        createdAt = createdAt,
++        updatedAt = updatedAt,
++    )
++
+     override suspend fun getExternalAccessTokenLegacy(userId: Long, installationId: String): AccessToken {
+         val sessionId = translateLegacySessionIdUseCase(userId, installationId)
+             ?: error("Session not found for userId: $userId installationId: $installationId")
+diff --git a/src/test/kotlin/integration/com/tuenti/services/auth/sessions/boundaries/service/SessionsServiceImplIntegrationTest.kt b/src/test/kotlin/integration/com/tuenti/services/auth/sessions/boundaries/service/SessionsServiceImplIntegrationTest.kt
+new file mode 100644
+index 0000000..6dd6e18
+--- /dev/null
++++ b/src/test/kotlin/integration/com/tuenti/services/auth/sessions/boundaries/service/SessionsServiceImplIntegrationTest.kt
+@@ -0,0 +1,83 @@
++package com.tuenti.services.auth.sessions.boundaries.service
++
++import com.tuenti.platform.kotlintest.junit5.TKotlinIntegrationTest
++import com.tuenti.platform.kotlintest.junit5.nio.NioTestExtension
++import com.tuenti.platform.kotlintest.junit5.nio.NioTestScope
++import com.tuenti.platform.test.integration.NativeFunctionsWithOverride
++import com.tuenti.platform.test.system.NativeFunctionsMock
++import com.tuenti.services.auth.sessions.boundaries.service.v2.Sessions
++import com.tuenti.services.auth.sessions.boundaries.service.v2.dto.UserSession
++import com.tuenti.services.auth.sessions.domain.SessionRepository
++import com.tuenti.services.auth.sessions.domain.model.ExternalAccessToken
++import com.tuenti.services.auth.sessions.domain.model.ExternalRefreshToken
++import com.tuenti.services.auth.sessions.domain.model.SessionCreation
++import org.junit.jupiter.api.BeforeEach
++import org.junit.jupiter.api.Test
++import org.junit.jupiter.api.extension.ExtendWith
++import java.time.Instant
++import kotlin.random.Random
++import kotlin.test.assertEquals
++
++@ExtendWith(NioTestExtension::class)
++class SessionsServiceImplIntegrationTest : TKotlinIntegrationTest() {
++
++    private val sessions: Sessions by inject()
++    private val sessionRepository: SessionRepository by inject()
++    private val nativeFunctionsWithOverride: NativeFunctionsWithOverride by inject()
++    private val nativeFunctionsMock = NativeFunctionsMock()
++
++    @BeforeEach
++    fun setup() {
++        nativeFunctionsWithOverride.setOverrideImplementation(nativeFunctionsMock)
++        nativeFunctionsMock.setCurrentTime(SOME_CREATED_AT.epochSecond)
++    }
++
++    @Test
++    fun NioTestScope.`getAllUserSessions returns all the sessions of the user`() = request {
++        val firstSessionId = sessionRepository.create(aSessionCreation(USER_WITH_SESSIONS, "installation-1"))
++        val secondSessionId = sessionRepository.create(aSessionCreation(USER_WITH_SESSIONS, "installation-2"))
++
++        val userSessions = sessions.getAllUserSessions(USER_WITH_SESSIONS)
++
++        assertEquals(
++            setOf(
++                UserSession(firstSessionId.toString(), "installation-1", SOME_CREATED_AT, SOME_CREATED_AT),
++                UserSession(secondSessionId.toString(), "installation-2", SOME_CREATED_AT, SOME_CREATED_AT),
++            ),
++            userSessions.toSet(),
++        )
++    }
++
++    @Test
++    fun NioTestScope.`getAllUserSessions does not return sessions of other users`() = request {
++        sessionRepository.create(aSessionCreation(OTHER_USER, "other-installation"))
++
++        val userSessions = sessions.getAllUserSessions(USER_WITHOUT_SESSIONS)
++
++        assertEquals(emptyList(), userSessions)
++    }
++
++    companion object {
++        private val USER_WITH_SESSIONS = Random.nextLong(1_000_000L, Int.MAX_VALUE.toLong())
++        private val USER_WITHOUT_SESSIONS = USER_WITH_SESSIONS + 1
++        private val OTHER_USER = USER_WITH_SESSIONS + 2
++
++        private val SOME_CREATED_AT = Instant.ofEpochSecond(1_700_000_000L)
++
++        private fun aSessionCreation(userId: Long, installationId: String) = SessionCreation(
++            userId = userId,
++            installationId = installationId,
++            flowId = "some-flow-id",
++            externalSession = SessionCreation.ExternalSession(
++                accessToken = ExternalAccessToken(
++                    value = "some-access-token",
++                    expiresAt = Instant.ofEpochSecond(1_700_003_600L),
++                    flowId = "some-flow-id",
++                ),
++                expiresIn = 3600,
++                refreshToken = ExternalRefreshToken("some-refresh-token", SOME_CREATED_AT),
++                idToken = null,
++            )
++        )
++    }
++}
+diff --git a/src/test/kotlin/unit/com/tuenti/services/auth/sessions/boundaries/service/SessionsServiceImplUnitTest.kt b/src/test/kotlin/unit/com/tuenti/services/auth/sessions/boundaries/service/SessionsServiceImplUnitTest.kt
+index f46e52c..2940daf 100644
+--- a/src/test/kotlin/unit/com/tuenti/services/auth/sessions/boundaries/service/SessionsServiceImplUnitTest.kt
++++ b/src/test/kotlin/unit/com/tuenti/services/auth/sessions/boundaries/service/SessionsServiceImplUnitTest.kt
+@@ -7,6 +7,7 @@ import com.tuenti.services.auth.sessions.domain.model.ExternalRefreshToken
+ import com.tuenti.services.auth.sessions.domain.model.SessionId
+ import com.tuenti.services.auth.sessions.usecase.CloseAllSessionsUseCase
+ import com.tuenti.services.auth.sessions.usecase.CloseSessionUseCase
++import com.tuenti.services.auth.sessions.usecase.GetAllUserSessionsUseCase
+ import com.tuenti.services.auth.sessions.usecase.GetExternalAccessTokenUseCase
+ import com.tuenti.services.auth.sessions.usecase.GetExternalRefreshTokenUseCase
+ import com.tuenti.services.auth.sessions.usecase.GetIdTokenUseCase
+@@ -58,6 +59,9 @@ class SessionsServiceImplUnitTest {
+     @MockK
+     private lateinit var closeAllSessionsUseCase: CloseAllSessionsUseCase
+ 
++    @MockK
++    private lateinit var getAllUserSessionsUseCase: GetAllUserSessionsUseCase
++
+     @MockK
+     private lateinit var sessionsCacheManager: SessionsCacheManager
+ 
+diff --git a/.classpath b/.classpath
+new file mode 100644
+index 0000000..cbec93d
+--- /dev/null
++++ b/.classpath
+@@ -0,0 +1,71 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<classpath>
++	<classpathentry excluding="**" kind="src" output="target/classes" path="src/main/resources">
++		<attributes>
++			<attribute name="maven.pomderived" value="true"/>
++			<attribute name="optional" value="true"/>
++		</attributes>
++	</classpathentry>
++	<classpathentry excluding="**" kind="src" output="target/test-classes" path="src/test/resources">
++		<attributes>
++			<attribute name="maven.pomderived" value="true"/>
++			<attribute name="test" value="true"/>
++			<attribute name="optional" value="true"/>
++		</attributes>
++	</classpathentry>
++	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER/org.eclipse.jdt.internal.debug.ui.launcher.StandardVMType/JavaSE-1.8">
++		<attributes>
++			<attribute name="maven.pomderived" value="true"/>
++		</attributes>
++	</classpathentry>
++	<classpathentry kind="con" path="org.eclipse.m2e.MAVEN2_CLASSPATH_CONTAINER">
++		<attributes>
++			<attribute name="maven.pomderived" value="true"/>
++		</attributes>
++	</classpathentry>
++	<classpathentry kind="src" path="target/generated-sources/annotations">
++		<attributes>
++			<attribute name="optional" value="true"/>
++			<attribute name="maven.pomderived" value="true"/>
++			<attribute name="ignore_optional_problems" value="true"/>
++			<attribute name="m2e-apt" value="true"/>
++		</attributes>
++	</classpathentry>
++	<classpathentry kind="src" output="target/classes" path="src/main/java">
++		<attributes>
++			<attribute name="optional" value="true"/>
++			<attribute name="maven.pomderived" value="true"/>
++		</attributes>
++	</classpathentry>
++	<classpathentry kind="src" output="target/test-classes" path="src/test/java/unit">
++		<attributes>
++			<attribute name="optional" value="true"/>
++			<attribute name="maven.pomderived" value="true"/>
++			<attribute name="test" value="true"/>
++		</attributes>
++	</classpathentry>
++	<classpathentry kind="src" output="target/test-classes" path="src/test/java/integration">
++		<attributes>
++			<attribute name="optional" value="true"/>
++			<attribute name="maven.pomderived" value="true"/>
++			<attribute name="test" value="true"/>
++		</attributes>
++	</classpathentry>
++	<classpathentry kind="src" output="target/test-classes" path="src/test/java/acceptance">
++		<attributes>
++			<attribute name="optional" value="true"/>
++			<attribute name="maven.pomderived" value="true"/>
++			<attribute name="test" value="true"/>
++		</attributes>
++	</classpathentry>
++	<classpathentry kind="src" output="target/test-classes" path="target/generated-test-sources/test-annotations">
++		<attributes>
++			<attribute name="optional" value="true"/>
++			<attribute name="maven.pomderived" value="true"/>
++			<attribute name="ignore_optional_problems" value="true"/>
++			<attribute name="m2e-apt" value="true"/>
++			<attribute name="test" value="true"/>
++		</attributes>
++	</classpathentry>
++	<classpathentry kind="output" path="target/classes"/>
++</classpath>
+diff --git a/.factorypath b/.factorypath
+new file mode 100644
+index 0000000..aae55a7
+--- /dev/null
++++ b/.factorypath
+@@ -0,0 +1,349 @@
++<factorypath>
++    <factorypathentry kind="VARJAR" id="M2_REPO/com/tuenti/platform/platform-nio/25.0.40/platform-nio-25.0.40.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/jetbrains/kotlin/kotlin-stdlib-jdk8/2.2.20/kotlin-stdlib-jdk8-2.2.20.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/jetbrains/kotlin/kotlin-stdlib-jdk7/2.2.20/kotlin-stdlib-jdk7-2.2.20.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/springframework/spring-context/6.2.17/spring-context-6.2.17.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/springframework/spring-aop/6.2.17/spring-aop-6.2.17.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/springframework/spring-beans/6.2.17/spring-beans-6.2.17.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/springframework/spring-core/6.2.17/spring-core-6.2.17.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/springframework/spring-expression/6.2.17/spring-expression-6.2.17.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/io/micrometer/micrometer-observation/1.15.0/micrometer-observation-1.15.0.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/springframework/spring-webflux/6.2.17/spring-webflux-6.2.17.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/springframework/spring-web/6.2.17/spring-web-6.2.17.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/io/projectreactor/netty/reactor-netty-http/1.2.11/reactor-netty-http-1.2.11.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/io/netty/netty-codec-http/4.1.127.Final/netty-codec-http-4.1.127.Final.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/io/netty/netty-transport/4.1.127.Final/netty-transport-4.1.127.Final.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/io/netty/netty-codec/4.1.127.Final/netty-codec-4.1.127.Final.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/io/netty/netty-handler/4.1.127.Final/netty-handler-4.1.127.Final.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/io/netty/netty-codec-http2/4.1.127.Final/netty-codec-http2-4.1.127.Final.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/io/netty/netty-resolver-dns/4.1.127.Final/netty-resolver-dns-4.1.127.Final.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/io/netty/netty-resolver/4.1.127.Final/netty-resolver-4.1.127.Final.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/io/netty/netty-codec-dns/4.1.127.Final/netty-codec-dns-4.1.127.Final.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/io/netty/netty-resolver-dns-native-macos/4.1.127.Final/netty-resolver-dns-native-macos-4.1.127.Final-osx-x86_64.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/io/netty/netty-resolver-dns-classes-macos/4.1.127.Final/netty-resolver-dns-classes-macos-4.1.127.Final.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/io/netty/netty-transport-native-epoll/4.1.127.Final/netty-transport-native-epoll-4.1.127.Final-linux-x86_64.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/io/netty/netty-transport-native-unix-common/4.1.127.Final/netty-transport-native-unix-common-4.1.127.Final.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/io/netty/netty-transport-classes-epoll/4.1.127.Final/netty-transport-classes-epoll-4.1.127.Final.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/io/projectreactor/netty/reactor-netty-core/1.2.11/reactor-netty-core-1.2.11.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/io/netty/netty-handler-proxy/4.1.127.Final/netty-handler-proxy-4.1.127.Final.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/io/netty/netty-codec-socks/4.1.127.Final/netty-codec-socks-4.1.127.Final.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/logging/log4j/log4j-api/2.22.0/log4j-api-2.22.0.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/jakarta/inject/jakarta.inject-api/2.0.1/jakarta.inject-api-2.0.1.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/com/google/inject/guice/7.0.0/guice-7.0.0.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/com/tuenti/xconfig/xconfig-base/4.0.2/xconfig-base-4.0.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/com/tuenti/platform/platform-rest-server/25.0.40/platform-rest-server-25.0.40.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/com/google/code/findbugs/jsr305/3.0.2/jsr305-3.0.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/commons-io/commons-io/2.20.0/commons-io-2.20.0.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/com/google/guava/guava/32.1.3-jre/guava-32.1.3-jre.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/com/google/guava/failureaccess/1.0.1/failureaccess-1.0.1.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/com/google/guava/listenablefuture/9999.0-empty-to-avoid-conflict-with-guava/listenablefuture-9999.0-empty-to-avoid-conflict-with-guava.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/com/google/j2objc/j2objc-annotations/2.8/j2objc-annotations-2.8.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/com/google/code/gson/gson/2.8.9/gson-2.8.9.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/commons/commons-lang3/3.18.0/commons-lang3-3.18.0.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/com/google/inject/extensions/guice-servlet/7.0.0/guice-servlet-7.0.0.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/jakarta/ws/rs/jakarta.ws.rs-api/3.1.0/jakarta.ws.rs-api-3.1.0.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/jakarta/validation/jakarta.validation-api/3.0.2/jakarta.validation-api-3.0.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/glassfish/jersey/core/jersey-server/3.1.5/jersey-server-3.1.5.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/glassfish/jersey/core/jersey-common/3.1.5/jersey-common-3.1.5.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/glassfish/hk2/osgi-resource-locator/1.0.3/osgi-resource-locator-1.0.3.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/glassfish/jersey/core/jersey-client/3.1.5/jersey-client-3.1.5.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/jakarta/annotation/jakarta.annotation-api/2.1.1/jakarta.annotation-api-2.1.1.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/glassfish/jersey/containers/jersey-container-servlet-core/3.1.5/jersey-container-servlet-core-3.1.5.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/glassfish/jersey/media/jersey-media-json-jackson/3.1.5/jersey-media-json-jackson-3.1.5.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/glassfish/jersey/ext/jersey-entity-filtering/3.1.5/jersey-entity-filtering-3.1.5.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/com/fasterxml/jackson/module/jackson-module-jakarta-xmlbind-annotations/2.15.3/jackson-module-jakarta-xmlbind-annotations-2.15.3.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/glassfish/jersey/inject/jersey-hk2/3.1.5/jersey-hk2-3.1.5.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/glassfish/hk2/hk2-locator/3.0.5/hk2-locator-3.0.5.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/glassfish/hk2/hk2-utils/3.0.5/hk2-utils-3.0.5.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/javassist/javassist/3.28.0-GA/javassist-3.28.0-GA.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/glassfish/hk2/guice-bridge/3.0.5/guice-bridge-3.0.5.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/glassfish/hk2/hk2-api/3.0.5/hk2-api-3.0.5.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/io/netty/netty-buffer/4.1.127.Final/netty-buffer-4.1.127.Final.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/io/netty/netty-common/4.1.127.Final/netty-common-4.1.127.Final.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/io/opentelemetry/instrumentation/opentelemetry-instrumentation-api-semconv/1.31.0-alpha/opentelemetry-instrumentation-api-semconv-1.31.0-alpha.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/io/opentelemetry/semconv/opentelemetry-semconv/1.21.0-alpha/opentelemetry-semconv-1.21.0-alpha.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/io/opentelemetry/opentelemetry-extension-incubator/1.31.0-alpha/opentelemetry-extension-incubator-1.31.0-alpha.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/com/tuenti/platform/platform-resilience4j/25.0.40/platform-resilience4j-25.0.40.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/com/tuenti/platform/platform-rxjava/25.0.40/platform-rxjava-25.0.40.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/io/github/resilience4j/resilience4j-bulkhead/1.7.1/resilience4j-bulkhead-1.7.1.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/io/vavr/vavr/0.10.2/vavr-0.10.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/io/vavr/vavr-match/0.10.2/vavr-match-0.10.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/io/github/resilience4j/resilience4j-core/1.7.1/resilience4j-core-1.7.1.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/io/github/resilience4j/resilience4j-circuitbreaker/1.7.1/resilience4j-circuitbreaker-1.7.1.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/io/github/resilience4j/resilience4j-retry/1.7.1/resilience4j-retry-1.7.1.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/io/github/resilience4j/resilience4j-prometheus/1.7.1/resilience4j-prometheus-1.7.1.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/io/prometheus/simpleclient_common/0.16.0/simpleclient_common-0.16.0.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/io/github/resilience4j/resilience4j-rxjava3/1.7.1/resilience4j-rxjava3-1.7.1.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/io/github/resilience4j/resilience4j-kotlin/1.7.1/resilience4j-kotlin-1.7.1.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/io/reactivex/rxjava3/rxjava/3.1.4/rxjava-3.1.4.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/reactivestreams/reactive-streams/1.0.4/reactive-streams-1.0.4.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/com/tuenti/platform/platform-core/25.0.40/platform-core-25.0.40.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/aopalliance/aopalliance/1.0/aopalliance-1.0.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/com/sun/activation/jakarta.activation/1.2.2/jakarta.activation-1.2.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/com/google/inject/extensions/guice-assistedinject/7.0.0/guice-assistedinject-7.0.0.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/com/google/inject/extensions/guice-persist/6.0.0/guice-persist-6.0.0.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/reflections/reflections/0.9.9-RC1/reflections-0.9.9-RC1.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/net/spy/spymemcached/2.12.3-tuenti2/spymemcached-2.12.3-tuenti2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/com/fasterxml/jackson/core/jackson-databind/2.21.5/jackson-databind-2.21.5.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/com/fasterxml/jackson/core/jackson-core/2.21.5/jackson-core-2.21.5.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/com/fasterxml/jackson/datatype/jackson-datatype-jsr310/2.21.5/jackson-datatype-jsr310-2.21.5.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/com/fasterxml/jackson/module/jackson-module-parameter-names/2.21.5/jackson-module-parameter-names-2.21.5.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/com/fasterxml/jackson/module/jackson-module-kotlin/2.21.5/jackson-module-kotlin-2.21.5.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/httpcomponents/httpclient/4.5.13/httpclient-4.5.13.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/httpcomponents/httpcore/4.4.13/httpcore-4.4.13.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/commons-codec/commons-codec/1.14/commons-codec-1.14.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/commons/commons-collections4/4.4/commons-collections4-4.4.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/com/zaxxer/HikariCP/3.4.2/HikariCP-3.4.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/io/asyncer/r2dbc-mysql/1.4.0/r2dbc-mysql-1.4.0.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/io/r2dbc/r2dbc-spi/1.0.0.RELEASE/r2dbc-spi-1.0.0.RELEASE.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/io/r2dbc/r2dbc-pool/1.0.2.RELEASE/r2dbc-pool-1.0.2.RELEASE.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/io/projectreactor/addons/reactor-pool/1.1.5/reactor-pool-1.1.5.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/io/dropwizard/metrics/metrics-core/3.2.6/metrics-core-3.2.6.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/commons-beanutils/commons-beanutils/1.11.0/commons-beanutils-1.11.0.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/commons-collections/commons-collections/3.2.2/commons-collections-3.2.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/logging/log4j/log4j-core/2.22.0/log4j-core-2.22.0.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/logging/log4j/log4j-slf4j2-impl/2.22.0/log4j-slf4j2-impl-2.22.0.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/slf4j/jcl-over-slf4j/2.0.9/jcl-over-slf4j-2.0.9.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/com/lmax/disruptor/3.4.4/disruptor-3.4.4.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/io/sentry/sentry-log4j2/1.6.3/sentry-log4j2-1.6.3.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/io/sentry/sentry/1.6.3/sentry-1.6.3.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/glassfish/jakarta.el/3.0.4/jakarta.el-3.0.4.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/io/prometheus/jmx/collector/0.20.0/collector-0.20.0.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/io/prometheus/simpleclient/0.16.0/simpleclient-0.16.0.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/io/prometheus/simpleclient_tracer_otel/0.16.0/simpleclient_tracer_otel-0.16.0.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/io/prometheus/simpleclient_tracer_common/0.16.0/simpleclient_tracer_common-0.16.0.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/io/prometheus/simpleclient_tracer_otel_agent/0.16.0/simpleclient_tracer_otel_agent-0.16.0.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/io/prometheus/simpleclient_hotspot/0.16.0/simpleclient_hotspot-0.16.0.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/io/prometheus/simpleclient_httpserver/0.16.0/simpleclient_httpserver-0.16.0.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/io/prometheus/simpleclient_dropwizard/0.16.0/simpleclient_dropwizard-0.16.0.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/io/micrometer/micrometer-core/1.15.0/micrometer-core-1.15.0.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/io/micrometer/micrometer-commons/1.15.0/micrometer-commons-1.15.0.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/hdrhistogram/HdrHistogram/2.1.12/HdrHistogram-2.1.12.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/latencyutils/LatencyUtils/2.0.3/LatencyUtils-2.0.3.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/io/micrometer/micrometer-registry-prometheus-simpleclient/1.15.0/micrometer-registry-prometheus-simpleclient-1.15.0.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/jakarta/xml/ws/jakarta.xml.ws-api/2.3.3/jakarta.xml.ws-api-2.3.3.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/jakarta/jws/jakarta.jws-api/2.1.0/jakarta.jws-api-2.1.0.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/jakarta/xml/bind/jakarta.xml.bind-api/4.0.2/jakarta.xml.bind-api-4.0.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/jakarta/activation/jakarta.activation-api/2.1.3/jakarta.activation-api-2.1.3.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/jakarta/xml/soap/jakarta.xml.soap-api/1.4.2/jakarta.xml.soap-api-1.4.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/maven/maven-artifact/3.9.3/maven-artifact-3.9.3.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/io/projectreactor/reactor-core/3.7.12/reactor-core-3.7.12.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/jetbrains/kotlinx/kotlinx-coroutines-reactor/1.10.2/kotlinx-coroutines-reactor-1.10.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/io/opentelemetry/opentelemetry-api/1.31.0/opentelemetry-api-1.31.0.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/io/opentelemetry/opentelemetry-context/1.31.0/opentelemetry-context-1.31.0.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/io/opentelemetry/opentelemetry-sdk/1.31.0/opentelemetry-sdk-1.31.0.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/io/opentelemetry/opentelemetry-sdk-common/1.31.0/opentelemetry-sdk-common-1.31.0.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/io/opentelemetry/opentelemetry-sdk-trace/1.31.0/opentelemetry-sdk-trace-1.31.0.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/io/opentelemetry/opentelemetry-sdk-metrics/1.31.0/opentelemetry-sdk-metrics-1.31.0.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/io/opentelemetry/opentelemetry-sdk-logs/1.31.0/opentelemetry-sdk-logs-1.31.0.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/io/opentelemetry/opentelemetry-exporter-otlp/1.31.0/opentelemetry-exporter-otlp-1.31.0.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/io/opentelemetry/opentelemetry-exporter-otlp-common/1.31.0/opentelemetry-exporter-otlp-common-1.31.0.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/io/opentelemetry/opentelemetry-exporter-common/1.31.0/opentelemetry-exporter-common-1.31.0.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/io/opentelemetry/opentelemetry-exporter-sender-okhttp/1.31.0/opentelemetry-exporter-sender-okhttp-1.31.0.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/io/opentelemetry/opentelemetry-sdk-extension-autoconfigure-spi/1.31.0/opentelemetry-sdk-extension-autoconfigure-spi-1.31.0.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/io/opentelemetry/opentelemetry-sdk-extension-autoconfigure/1.31.0/opentelemetry-sdk-extension-autoconfigure-1.31.0.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/io/opentelemetry/opentelemetry-api-events/1.31.0-alpha/opentelemetry-api-events-1.31.0-alpha.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/io/opentelemetry/instrumentation/opentelemetry-instrumentation-api/1.31.0/opentelemetry-instrumentation-api-1.31.0.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/io/projectreactor/tools/blockhound/1.0.15.RELEASE/blockhound-1.0.15.RELEASE.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/com/tuenti/platform/platform-asynchronous/25.0.40/platform-asynchronous-25.0.40.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/com/tuenti/platform/platform-tservice/25.0.40/platform-tservice-25.0.40.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/com/tuenti/platform/platform-rabbitmq/25.0.40/platform-rabbitmq-25.0.40.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/com/rabbitmq/amqp-client/5.18.0/amqp-client-5.18.0.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/commons/commons-pool2/2.6.2/commons-pool2-2.6.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/com/tuenti/platform/platform-kotlin-xconfig-serialization/25.0.40/platform-kotlin-xconfig-serialization-25.0.40.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/com/tuenti/platform/platform-retrofit/25.0.40/platform-retrofit-25.0.40.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/com/squareup/retrofit2/retrofit/2.7.2/retrofit-2.7.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/com/squareup/retrofit2/converter-jackson/2.7.2/converter-jackson-2.7.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/com/squareup/retrofit2/converter-scalars/2.7.2/converter-scalars-2.7.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/com/squareup/okhttp3/okhttp/4.12.0/okhttp-4.12.0.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/com/squareup/okio/okio/3.6.0/okio-3.6.0.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/com/squareup/okio/okio-jvm/3.6.0/okio-jvm-3.6.0.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/jetbrains/kotlin/kotlin-stdlib-common/1.9.10/kotlin-stdlib-common-1.9.10.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/com/tuenti/platform/platform-db/25.0.40/platform-db-25.0.40.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/javax/transaction/javax.transaction-api/1.3/javax.transaction-api-1.3.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/javax/xml/bind/jaxb-api/2.3.1/jaxb-api-2.3.1.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/jakarta/transaction/jakarta.transaction-api/2.0.1/jakarta.transaction-api-2.0.1.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/javax/persistence/javax.persistence-api/2.2/javax.persistence-api-2.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/javax/validation/validation-api/2.0.1.Final/validation-api-2.0.1.Final.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/com/mysql/mysql-connector-j/8.2.0/mysql-connector-j-8.2.0.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/com/google/protobuf/protobuf-java/3.25.5/protobuf-java-3.25.5.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/hibernate/hibernate-core/5.6.15.Final/hibernate-core-5.6.15.Final.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/net/bytebuddy/byte-buddy/1.17.8/byte-buddy-1.17.8.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/antlr/antlr/2.7.7/antlr-2.7.7.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/jboss/jandex/2.4.4.Final/jandex-2.4.4.Final.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/com/fasterxml/classmate/1.5.1/classmate-1.5.1.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/hibernate/common/hibernate-commons-annotations/5.1.2.Final/hibernate-commons-annotations-5.1.2.Final.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/glassfish/jaxb/jaxb-runtime/2.3.1/jaxb-runtime-2.3.1.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/glassfish/jaxb/txw2/2.3.1/txw2-2.3.1.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/com/sun/istack/istack-commons-runtime/3.0.11/istack-commons-runtime-3.0.11.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/jvnet/staxex/stax-ex/1.7.8/stax-ex-1.7.8.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/com/sun/xml/fastinfoset/FastInfoset/1.2.18/FastInfoset-1.2.18.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/shardingsphere-jdbc-core/5.3.2/shardingsphere-jdbc-core-5.3.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/shardingsphere-transaction-core/5.3.2/shardingsphere-transaction-core-5.3.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/shardingsphere-transaction-api/5.3.2/shardingsphere-transaction-api-5.3.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/shardingsphere-infra-executor/5.3.2/shardingsphere-infra-executor-5.3.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/com/alibaba/transmittable-thread-local/2.14.2/transmittable-thread-local-2.14.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/shardingsphere-sql-parser-sql92/5.3.2/shardingsphere-sql-parser-sql92-5.3.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/shardingsphere-sql-parser-engine/5.3.2/shardingsphere-sql-parser-engine-5.3.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/shardingsphere-sql-parser-spi/5.3.2/shardingsphere-sql-parser-spi-5.3.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/shardingsphere-sql-parser-statement/5.3.2/shardingsphere-sql-parser-statement-5.3.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/shardingsphere-sql-parser-mysql/5.3.2/shardingsphere-sql-parser-mysql-5.3.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/shardingsphere-sql-parser-postgresql/5.3.2/shardingsphere-sql-parser-postgresql-5.3.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/shardingsphere-sql-parser-oracle/5.3.2/shardingsphere-sql-parser-oracle-5.3.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/shardingsphere-sql-parser-sqlserver/5.3.2/shardingsphere-sql-parser-sqlserver-5.3.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/shardingsphere-sql-parser-opengauss/5.3.2/shardingsphere-sql-parser-opengauss-5.3.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/shardingsphere-mysql-dialect-exception/5.3.2/shardingsphere-mysql-dialect-exception-5.3.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/shardingsphere-dialect-exception-core/5.3.2/shardingsphere-dialect-exception-core-5.3.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/shardingsphere-postgresql-dialect-exception/5.3.2/shardingsphere-postgresql-dialect-exception-5.3.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/shardingsphere-authority-core/5.3.2/shardingsphere-authority-core-5.3.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/shardingsphere-authority-api/5.3.2/shardingsphere-authority-api-5.3.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/shardingsphere-single-core/5.3.2/shardingsphere-single-core-5.3.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/shardingsphere-single-api/5.3.2/shardingsphere-single-api-5.3.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/shardingsphere-infra-route/5.3.2/shardingsphere-infra-route-5.3.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/shardingsphere-traffic-core/5.3.2/shardingsphere-traffic-core-5.3.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/shardingsphere-infra-common/5.3.2/shardingsphere-infra-common-5.3.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/shardingsphere-infra-binder/5.3.2/shardingsphere-infra-binder-5.3.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/shardingsphere-traffic-api/5.3.2/shardingsphere-traffic-api-5.3.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/shardingsphere-infra-context/5.3.2/shardingsphere-infra-context-5.3.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/shardingsphere-distsql-parser/5.3.2/shardingsphere-distsql-parser-5.3.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/shardingsphere-distsql-statement/5.3.2/shardingsphere-distsql-statement-5.3.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/shardingsphere-metadata-core/5.3.2/shardingsphere-metadata-core-5.3.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/shardingsphere-sql-translator-core/5.3.2/shardingsphere-sql-translator-core-5.3.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/shardingsphere-sql-translator-api/5.3.2/shardingsphere-sql-translator-api-5.3.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/shardingsphere-standalone-mode-core/5.3.2/shardingsphere-standalone-mode-core-5.3.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/shardingsphere-mode-core/5.3.2/shardingsphere-mode-core-5.3.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/shardingsphere-standalone-mode-repository-api/5.3.2/shardingsphere-standalone-mode-repository-api-5.3.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/shardingsphere-standalone-mode-repository-jdbc-h2/5.3.2/shardingsphere-standalone-mode-repository-jdbc-h2-5.3.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/shardingsphere-standalone-mode-repository-jdbc-core/5.3.2/shardingsphere-standalone-mode-repository-jdbc-core-5.3.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/shardingsphere-cluster-mode-core/5.3.2/shardingsphere-cluster-mode-core-5.3.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/shardingsphere-cluster-mode-repository-api/5.3.2/shardingsphere-cluster-mode-repository-api-5.3.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/shardingsphere-sharding-core/5.3.2/shardingsphere-sharding-core-5.3.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/shardingsphere-sharding-api/5.3.2/shardingsphere-sharding-api-5.3.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/shardingsphere-data-pipeline-api/5.3.2/shardingsphere-data-pipeline-api-5.3.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/shardingsphere-infra-rewrite/5.3.2/shardingsphere-infra-rewrite-5.3.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/shardingsphere-sql-translator-native-provider/5.3.2/shardingsphere-sql-translator-native-provider-5.3.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/shardingsphere-infra-merge/5.3.2/shardingsphere-infra-merge-5.3.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/calcite/calcite-linq4j/1.32.0/calcite-linq4j-1.32.0.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/calcite/avatica/avatica-core/1.22.0/avatica-core-1.22.0.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/calcite/avatica/avatica-metrics/1.22.0/avatica-metrics-1.22.0.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/httpcomponents/client5/httpclient5/5.1.3/httpclient5-5.1.3.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/httpcomponents/core5/httpcore5-h2/5.1.3/httpcore5-h2-5.1.3.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/httpcomponents/core5/httpcore5/5.1.3/httpcore5-5.1.3.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/shardingsphere-time-service-core/5.3.2/shardingsphere-time-service-core-5.3.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/shardingsphere-time-service-api/5.3.2/shardingsphere-time-service-api-5.3.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/shardingsphere-system-time-service/5.3.2/shardingsphere-system-time-service-5.3.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/shardingsphere-sharding-cosid/5.3.2/shardingsphere-sharding-cosid-5.3.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/me/ahoo/cosid/cosid-core/1.16.0/cosid-core-1.16.0.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/shardingsphere-sharding-nanoid/5.3.2/shardingsphere-sharding-nanoid-5.3.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/com/aventrix/jnanoid/jnanoid/2.0.0/jnanoid-2.0.0.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/shardingsphere-sharding-cache/5.3.2/shardingsphere-sharding-cache-5.3.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/shardingsphere-readwrite-splitting-core/5.3.2/shardingsphere-readwrite-splitting-core-5.3.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/shardingsphere-readwrite-splitting-api/5.3.2/shardingsphere-readwrite-splitting-api-5.3.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/shardingsphere-db-discovery-core/5.3.2/shardingsphere-db-discovery-core-5.3.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/shardingsphere-db-discovery-api/5.3.2/shardingsphere-db-discovery-api-5.3.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/shardingsphere-db-discovery-mysql/5.3.2/shardingsphere-db-discovery-mysql-5.3.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/shardingsphere-db-discovery-opengauss/5.3.2/shardingsphere-db-discovery-opengauss-5.3.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/shardingsphere-schedule-core/5.3.2/shardingsphere-schedule-core-5.3.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/elasticjob/elasticjob-lite-core/3.0.2/elasticjob-lite-core-3.0.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/elasticjob/elasticjob-api/3.0.2/elasticjob-api-3.0.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/elasticjob/elasticjob-infra-common/3.0.2/elasticjob-infra-common-3.0.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/elasticjob/elasticjob-registry-center-api/3.0.2/elasticjob-registry-center-api-3.0.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/elasticjob/elasticjob-registry-center-zookeeper-curator/3.0.2/elasticjob-registry-center-zookeeper-curator-3.0.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/curator/curator-framework/5.1.0/curator-framework-5.1.0.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/curator/curator-client/5.1.0/curator-client-5.1.0.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/curator/curator-recipes/5.1.0/curator-recipes-5.1.0.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/elasticjob/elasticjob-simple-executor/3.0.2/elasticjob-simple-executor-3.0.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/elasticjob/elasticjob-executor-kernel/3.0.2/elasticjob-executor-kernel-3.0.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/elasticjob/elasticjob-error-handler-general/3.0.2/elasticjob-error-handler-general-3.0.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/elasticjob/elasticjob-error-handler-spi/3.0.2/elasticjob-error-handler-spi-3.0.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/elasticjob/elasticjob-dataflow-executor/3.0.2/elasticjob-dataflow-executor-3.0.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/elasticjob/elasticjob-script-executor/3.0.2/elasticjob-script-executor-3.0.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/commons/commons-exec/1.3/commons-exec-1.3.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/elasticjob/elasticjob-http-executor/3.0.2/elasticjob-http-executor-3.0.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/elasticjob/elasticjob-tracing-rdb/3.0.2/elasticjob-tracing-rdb-3.0.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/elasticjob/elasticjob-tracing-api/3.0.2/elasticjob-tracing-api-3.0.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/elasticjob/elasticjob-lite-lifecycle/3.0.2/elasticjob-lite-lifecycle-3.0.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/shardingsphere-encrypt-core/5.3.2/shardingsphere-encrypt-core-5.3.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/shardingsphere-encrypt-api/5.3.2/shardingsphere-encrypt-api-5.3.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/shardingsphere-encrypt-sm/5.3.2/shardingsphere-encrypt-sm-5.3.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/shardingsphere-mask-core/5.3.2/shardingsphere-mask-core-5.3.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/shardingsphere-mask-api/5.3.2/shardingsphere-mask-api-5.3.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/shardingsphere-shadow-core/5.3.2/shardingsphere-shadow-core-5.3.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/shardingsphere-shadow-api/5.3.2/shardingsphere-shadow-api-5.3.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/shardingsphere-sql-federation-core/5.3.2/shardingsphere-sql-federation-core-5.3.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/shardingsphere-sql-federation-api/5.3.2/shardingsphere-sql-federation-api-5.3.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/shardingsphere-sql-federation-executor-advanced/5.3.2/shardingsphere-sql-federation-executor-advanced-5.3.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/shardingsphere-sql-federation-executor-core/5.3.2/shardingsphere-sql-federation-executor-core-5.3.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/shardingsphere-sql-federation-optimizer/5.3.2/shardingsphere-sql-federation-optimizer-5.3.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/calcite/calcite-core/1.32.0/calcite-core-1.32.0.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/locationtech/jts/jts-core/1.19.0/jts-core-1.19.0.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/locationtech/jts/io/jts-io-common/1.19.0/jts-io-common-1.19.0.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/com/googlecode/json-simple/json-simple/1.1.1/json-simple-1.1.1.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/locationtech/proj4j/proj4j/1.1.5/proj4j-1.1.5.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/com/google/uzaygezen/uzaygezen-core/0.2/uzaygezen-core-0.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/com/yahoo/datasketches/sketches-core/0.9.0/sketches-core-0.9.0.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/com/yahoo/datasketches/memory/0.9.0/memory-0.9.0.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/net/hydromatic/aggdesigner-algorithm/6.0/aggdesigner-algorithm-6.0.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/commons-lang/commons-lang/2.4/commons-lang-2.4.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/commons/commons-dbcp2/2.6.0/commons-dbcp2-2.6.0.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/codehaus/janino/commons-compiler/3.1.8/commons-compiler-3.1.8.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/codehaus/janino/janino/3.1.8/janino-3.1.8.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/shardingsphere-sql-federation-executor-original/5.3.2/shardingsphere-sql-federation-executor-original-5.3.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/shardingsphere-parser-core/5.3.2/shardingsphere-parser-core-5.3.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/shardingsphere-parser-api/5.3.2/shardingsphere-parser-api-5.3.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/shardingsphere-infra-parser/5.3.2/shardingsphere-infra-parser-5.3.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/shardingsphere-logging-core/5.3.2/shardingsphere-logging-core-5.3.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/shardingsphere-logging-api/5.3.2/shardingsphere-logging-api-5.3.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/slf4j/jul-to-slf4j/1.7.36/jul-to-slf4j-1.7.36.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/shardingsphere/shardingsphere-infra-util-groovy/5.3.2/shardingsphere-infra-util-groovy-5.3.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/hibernate/validator/hibernate-validator/6.2.0.Final/hibernate-validator-6.2.0.Final.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/springframework/data/spring-data-r2dbc/3.5.5/spring-data-r2dbc-3.5.5.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/springframework/data/spring-data-relational/3.5.5/spring-data-relational-3.5.5.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/springframework/data/spring-data-commons/3.5.5/spring-data-commons-3.5.5.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/springframework/spring-tx/6.2.17/spring-tx-6.2.17.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/springframework/spring-jdbc/6.2.17/spring-jdbc-6.2.17.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/springframework/spring-r2dbc/6.2.17/spring-r2dbc-6.2.17.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/com/telefonica/r2dbc/r2dbc-sharding/0.5/r2dbc-sharding-0.5.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/antlr/antlr4-runtime/4.13.2/antlr4-runtime-4.13.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/jakarta/persistence/jakarta.persistence-api/3.2.0/jakarta.persistence-api-3.2.0.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/com/tuenti/platform/platform-temporal-storage/25.0.40/platform-temporal-storage-25.0.40.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/com/tuenti/platform/platform-cron/25.0.40/platform-cron-25.0.40.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/com/fasterxml/jackson/module/jackson-module-jsonSchema/2.21.5/jackson-module-jsonSchema-2.21.5.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/quartz-scheduler/quartz/2.3.2/quartz-2.3.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/com/mchange/c3p0/0.9.5.4/c3p0-0.9.5.4.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/com/mchange/mchange-commons-java/0.2.15/mchange-commons-java-0.2.15.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/com/github/ben-manes/caffeine/caffeine/2.8.5/caffeine-2.8.5.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/checkerframework/checker-qual/3.13.0/checker-qual-3.13.0.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/com/google/errorprone/error_prone_annotations/2.4.0/error_prone_annotations-2.4.0.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/jetbrains/kotlinx/kotlinx-serialization-json/1.9.0/kotlinx-serialization-json-1.9.0.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/jetbrains/kotlinx/kotlinx-serialization-json-jvm/1.9.0/kotlinx-serialization-json-jvm-1.9.0.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/jetbrains/kotlinx/kotlinx-serialization-core/1.9.0/kotlinx-serialization-core-1.9.0.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/jetbrains/kotlinx/kotlinx-serialization-core-jvm/1.9.0/kotlinx-serialization-core-jvm-1.9.0.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/jetbrains/kotlinx/kotlinx-coroutines-core/1.10.2/kotlinx-coroutines-core-1.10.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/jetbrains/kotlinx/kotlinx-coroutines-core-jvm/1.10.2/kotlinx-coroutines-core-jvm-1.10.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/jetbrains/kotlinx/kotlinx-coroutines-rx3/1.10.2/kotlinx-coroutines-rx3-1.10.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/jetbrains/kotlinx/kotlinx-coroutines-reactive/1.10.2/kotlinx-coroutines-reactive-1.10.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/com/github/seancfoley/ipaddress/5.5.1/ipaddress-5.5.1.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/com/nimbusds/nimbus-jose-jwt/10.9/nimbus-jose-jwt-10.9.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/bouncycastle/bcprov-jdk18on/1.85/bcprov-jdk18on-1.85.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/bouncycastle/bcpkix-jdk18on/1.85/bcpkix-jdk18on-1.85.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/bouncycastle/bcutil-jdk18on/1.85/bcutil-jdk18on-1.85.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apiguardian/apiguardian-api/1.1.2/apiguardian-api-1.1.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/com/jayway/jsonpath/json-path/2.9.0/json-path-2.9.0.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/net/minidev/json-smart/2.5.0/json-smart-2.5.0.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/net/minidev/accessors-smart/2.5.0/accessors-smart-2.5.0.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/ow2/asm/asm/9.9/asm-9.9.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/jetbrains/kotlin/kotlin-reflect/2.2.20/kotlin-reflect-2.2.20.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/yaml/snakeyaml/2.2/snakeyaml-2.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/slf4j/slf4j-api/2.0.9/slf4j-api-2.0.9.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/apache/groovy/groovy/4.0.29/groovy-4.0.29.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/jboss/logging/jboss-logging/3.3.2.Final/jboss-logging-3.3.2.Final.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/com/fasterxml/jackson/core/jackson-annotations/2.21/jackson-annotations-2.21.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/com/fasterxml/jackson/dataformat/jackson-dataformat-yaml/2.21.5/jackson-dataformat-yaml-2.21.5.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/codehaus/plexus/plexus-utils/3.5.1/plexus-utils-3.5.1.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/jakarta/servlet/jakarta.servlet-api/6.0.0/jakarta.servlet-api-6.0.0.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/jetbrains/kotlin/kotlin-stdlib/2.2.20/kotlin-stdlib-2.2.20.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/jetbrains/annotations/17.0.0/annotations-17.0.0.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/com/tuenti/xconfig/xconfig-native/4.0.2/xconfig-native-4.0.2-native-bundle.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/scijava/native-lib-loader/2.5.0/native-lib-loader-2.5.0.jar" enabled="true" runInBatchMode="false"/>
++</factorypath>
+diff --git a/.project b/.project
+new file mode 100644
+index 0000000..e732580
+--- /dev/null
++++ b/.project
+@@ -0,0 +1,34 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<projectDescription>
++	<name>novum-authentication-service</name>
++	<comment></comment>
++	<projects>
++	</projects>
++	<buildSpec>
++		<buildCommand>
++			<name>org.eclipse.jdt.core.javabuilder</name>
++			<arguments>
++			</arguments>
++		</buildCommand>
++		<buildCommand>
++			<name>org.eclipse.m2e.core.maven2Builder</name>
++			<arguments>
++			</arguments>
++		</buildCommand>
++	</buildSpec>
++	<natures>
++		<nature>org.eclipse.jdt.core.javanature</nature>
++		<nature>org.eclipse.m2e.core.maven2Nature</nature>
++	</natures>
++	<filteredResources>
++		<filter>
++			<id>1785341662544</id>
++			<name></name>
++			<type>30</type>
++			<matcher>
++				<id>org.eclipse.core.resources.regexFilterMatcher</id>
++				<arguments>node_modules|\.git|__CREATED_BY_JAVA_LANGUAGE_SERVER__</arguments>
++			</matcher>
++		</filter>
++	</filteredResources>
++</projectDescription>
+diff --git a/.settings/org.eclipse.core.resources.prefs b/.settings/org.eclipse.core.resources.prefs
+new file mode 100644
+index 0000000..609d3ca
+--- /dev/null
++++ b/.settings/org.eclipse.core.resources.prefs
+@@ -0,0 +1,4 @@
++eclipse.preferences.version=1
++encoding//src/main/resources=UTF-8
++encoding//src/test/resources=UTF-8
++encoding/<project>=UTF-8
+diff --git a/.settings/org.eclipse.jdt.apt.core.prefs b/.settings/org.eclipse.jdt.apt.core.prefs
+new file mode 100644
+index 0000000..dfa4f3a
+--- /dev/null
++++ b/.settings/org.eclipse.jdt.apt.core.prefs
+@@ -0,0 +1,4 @@
++eclipse.preferences.version=1
++org.eclipse.jdt.apt.aptEnabled=true
++org.eclipse.jdt.apt.genSrcDir=target/generated-sources/annotations
++org.eclipse.jdt.apt.genTestSrcDir=target/generated-test-sources/test-annotations
+diff --git a/.settings/org.eclipse.jdt.core.prefs b/.settings/org.eclipse.jdt.core.prefs
+new file mode 100644
+index 0000000..90f7a5b
+--- /dev/null
++++ b/.settings/org.eclipse.jdt.core.prefs
+@@ -0,0 +1,9 @@
++eclipse.preferences.version=1
++org.eclipse.jdt.core.compiler.codegen.targetPlatform=1.8
++org.eclipse.jdt.core.compiler.compliance=1.8
++org.eclipse.jdt.core.compiler.problem.enablePreviewFeatures=disabled
++org.eclipse.jdt.core.compiler.problem.forbiddenReference=warning
++org.eclipse.jdt.core.compiler.problem.reportPreviewFeatures=ignore
++org.eclipse.jdt.core.compiler.processAnnotations=enabled
++org.eclipse.jdt.core.compiler.release=disabled
++org.eclipse.jdt.core.compiler.source=1.8
+diff --git a/.settings/org.eclipse.m2e.core.prefs b/.settings/org.eclipse.m2e.core.prefs
+new file mode 100644
+index 0000000..f897a7f
+--- /dev/null
++++ b/.settings/org.eclipse.m2e.core.prefs
+@@ -0,0 +1,4 @@
++activeProfiles=
++eclipse.preferences.version=1
++resolveWorkspaceProjects=true
++version=1
+diff --git a/get_external_token_info_spec.json b/get_external_token_info_spec.json
+new file mode 100644
+index 0000000..8d8a7fc
+--- /dev/null
++++ b/get_external_token_info_spec.json
+@@ -0,0 +1,370 @@
++{
++  "openapi": "3.0.3",
++  "info": {
++    "title": "LoginAuthAgent — External Token Information",
++    "version": "1.0.0-draft",
++    "description": "Proposed API for retrieving the external refresh token and external user identifier associated with the authenticated caller's session."
++  },
++  "servers": [
++    {
++      "url": "https://api-cert0-br.mytelco.io",
++      "description": "Brazil CERT0"
++    },
++    {
++      "url": "https://api-cert1-br.mytelco.io",
++      "description": "Brazil CERT1"
++    },
++    {
++      "url": "https://api-cert2-br.mytelco.io",
++      "description": "Brazil CERT2"
++    },
++    {
++      "url": "https://api-cert3-br.mytelco.io",
++      "description": "Brazil CERT3"
++    },
++    {
++      "url": "https://api-next-br.mytelco.io",
++      "description": "Brazil NEXT"
++    },
++    {
++      "url": "https://api-br.mytelco.io",
++      "description": "Brazil PROD"
++    }
++  ],
++  "tags": [
++    { "name": "LoginAuthAgent" }
++  ],
++  "paths": {
++    "/": {
++      "post": {
++        "tags": ["LoginAuthAgent"],
++        "operationId": "getExternalTokenInfo",
++        "summary": "Get external token information",
++        "description": "Invokes LoginAuthAgent.1.getExternalTokenInfo using JSON-RPC 2.0.\n\nNo method parameters are required. The session is resolved from the authenticated request context.\n\nThe response contains sensitive credentials and must not be logged or included in analytics or traces.",
++        "security": [
++          { "bearerAuth": [] }
++        ],
++        "parameters": [
++          {
++            "name": "X-Tuenti-ApiContext",
++            "in": "header",
++            "required": true,
++            "description": "API context encoded as a JSON string, following the existing gateway convention. Header values do not replace bearer authentication.",
++            "schema": { "type": "string" },
++            "example": "{\"installationId\":\"e3b0b92755131b81a3b5e45400d4f67d\",\"appBrand\":\"VivoBR\",\"appVersion\":\"26.5.1\",\"globalId\":1314260000}"
++          }
++        ],
++        "requestBody": {
++          "required": true,
++          "content": {
++            "application/json": {
++              "schema": {
++                "$ref": "#/components/schemas/GetExternalTokenInfoRequest"
++              },
++              "example": {
++                "jsonrpc": "2.0",
++                "id": 1,
++                "method": "LoginAuthAgent.1.getExternalTokenInfo",
++                "params": {}
++              }
++            }
++          }
++        },
++        "responses": {
++          "200": {
++            "description": "JSON-RPC success or error response. Clients must inspect result or error to determine the outcome. HTTP status mapping for RPC errors is subject to confirmation.",
++            "content": {
++              "application/json": {
++                "schema": {
++                  "oneOf": [
++                    { "$ref": "#/components/schemas/GetExternalTokenInfoResponse" },
++                    { "$ref": "#/components/schemas/JsonRpcErrorResponse" }
++                  ]
++                },
++                "examples": {
++                  "success": {
++                    "summary": "External token information retrieved",
++                    "value": {
++                      "jsonrpc": "2.0",
++                      "id": 1,
++                      "result": {
++                        "refresh_token": "<EXTERNAL_REFRESH_TOKEN>",
++                        "user_id": "external-user-123"
++                      }
++                    }
++                  },
++                  "tokenNotFound": {
++                    "summary": "Token information unavailable (proposed mapping)",
++                    "value": {
++                      "jsonrpc": "2.0",
++                      "id": 1,
++                      "error": {
++                        "code": 105,
++                        "message": "Token information not found"
++                      }
++                    }
++                  }
++                }
++              }
++            }
++          },
++          "default": {
++            "description": "Gateway or transport-level failure, including authentication or authorization rejection. HTTP status codes and response bodies are subject to confirmation."
++          }
++        }
++      }
++    },
++    "/token": {
++      "post": {
++        "tags": ["LoginAuthAgent"],
++        "operationId": "token",
++        "summary": "Exchange a legacy external refresh token for an access token",
++        "description": "Legacy OAuth-style token endpoint used by the mobile app to exchange an external refresh token for a bearer access token.\n\nClient authentication is optional on the first attempt: the app sends the request with no Authorization header. If the server responds with 401 and error 'invalid_client', the app resends the identical body with 'Authorization: Basic bGVnYWN5Og==' (base64 of 'legacy:', the fixed legacy client credentials with an empty password). A 401 with error 'invalid_grant' means the refresh token itself is invalid or expired and must not be retried with different credentials.\n\nNote: the 'invalid_client' retry trigger follows the RFC 6749 section 5.2 convention and has not been directly observed in captured traffic; only the anonymous success case and the invalid_grant error case have been confirmed. OpenAPI cannot express this conditional retry natively, so the sequence is documented here instead.",
++        "security": [
++          {},
++          { "legacyBasicAuth": [] }
++        ],
++        "parameters": [
++          {
++            "name": "User-Agent",
++            "in": "header",
++            "required": true,
++            "description": "Identifies the calling application, device, and OS. Follows the app's standard User-Agent convention.",
++            "schema": { "type": "string" },
++            "example": "Dalvik/2.1.0 (Linux; U; Android 14; Pixel 7 Build/UQ1A.240205.004) VivoBR/<versionName> NovumUITheme/standard ESIM/true MVMobile"
++          }
++        ],
++        "requestBody": {
++          "required": true,
++          "content": {
++            "application/x-www-form-urlencoded": {
++              "schema": {
++                "$ref": "#/components/schemas/TokenRequest"
++              },
++              "example": {
++                "grant_type": "refresh_token",
++                "client_id": "legacy",
++                "refresh_token": "<EXTERNAL_REFRESH_TOKEN>"
++              }
++            }
++          }
++        },
++        "responses": {
++          "200": {
++            "description": "Access token issued for the supplied refresh token.",
++            "content": {
++              "application/json": {
++                "schema": {
++                  "$ref": "#/components/schemas/TokenSuccessResponse"
++                },
++                "example": {
++                  "token_type": "bearer",
++                  "access_token": "-Xdj0RYAAAB1ibJqMG-wV7vXBT3czxr6fG_ImS73XdU"
++                }
++              }
++            }
++          },
++          "401": {
++            "description": "Authentication or grant rejected. Two distinct causes are possible and must be handled differently:\n\n- error 'invalid_client': the request lacked the required client authentication. The client should retry once with 'Authorization: Basic bGVnYWN5Og=='. (Convention per RFC 6749 section 5.2; not directly confirmed in captured traffic.)\n- error 'invalid_grant': the refresh token itself is invalid or expired. The client must not retry with different credentials. (Confirmed in captured traffic.)",
++            "content": {
++              "application/json": {
++                "schema": {
++                  "$ref": "#/components/schemas/TokenErrorResponse"
++                },
++                "examples": {
++                  "invalidGrant": {
++                    "summary": "Refresh token invalid or expired (confirmed)",
++                    "value": {
++                      "error": "invalid_grant",
++                      "error_description": "The refresh token invalid or expired"
++                    }
++                  },
++                  "invalidClient": {
++                    "summary": "Missing client authentication (unconfirmed, RFC 6749 convention)",
++                    "value": {
++                      "error": "invalid_client",
++                      "error_description": "Client authentication failed"
++                    }
++                  }
++                }
++              }
++            }
++          },
++          "default": {
++            "description": "Gateway or transport-level failure. HTTP status codes and response bodies are subject to confirmation."
++          }
++        }
++      }
++    }
++  },
++  "components": {
++    "securitySchemes": {
++      "bearerAuth": {
++        "type": "http",
++        "scheme": "bearer",
++        "description": "Valid access token identifying the authenticated caller."
++      },
++      "legacyBasicAuth": {
++        "type": "http",
++        "scheme": "basic",
++        "description": "HTTP Basic credentials for the fixed legacy client: username 'legacy' with an empty password, encoded as base64('legacy:') = 'bGVnYWN5Og=='. This carries no secret material; it restates the client_id already sent in the form body. Client authentication with an empty password follows RFC 6749 section 2.3.1."
++      }
++    },
++    "schemas": {
++      "RequestId": {
++        "description": "Request correlation identifier. The response echoes this value. This contract documents calls with a string or integer identifier.",
++        "oneOf": [
++          { "type": "integer" },
++          { "type": "string" }
++        ],
++        "example": 1
++      },
++      "GetExternalTokenInfoRequest": {
++        "type": "object",
++        "required": ["jsonrpc", "id", "method", "params"],
++        "additionalProperties": false,
++        "properties": {
++          "jsonrpc": {
++            "type": "string",
++            "enum": ["2.0"]
++          },
++          "id": { "$ref": "#/components/schemas/RequestId" },
++          "method": {
++            "type": "string",
++            "enum": ["LoginAuthAgent.1.getExternalTokenInfo"]
++          },
++          "params": {
++            "type": "object",
++            "description": "This method accepts no parameters.",
++            "additionalProperties": false,
++            "example": {}
++          }
++        }
++      },
++      "ExternalTokenInfo": {
++        "type": "object",
++        "required": ["refresh_token", "user_id"],
++        "properties": {
++          "refresh_token": {
++            "type": "string",
++            "description": "External authentication provider refresh token associated with the caller's session. Treat as a sensitive credential.",
++            "example": "<EXTERNAL_REFRESH_TOKEN>"
++          },
++          "user_id": {
++            "type": "string",
++            "description": "User identifier in the external authentication provider. This is not the internal Novum user identifier.",
++            "example": "external-user-123"
++          }
++        }
++      },
++      "GetExternalTokenInfoResponse": {
++        "type": "object",
++        "required": ["jsonrpc", "id", "result"],
++        "additionalProperties": false,
++        "properties": {
++          "jsonrpc": {
++            "type": "string",
++            "enum": ["2.0"]
++          },
++          "id": { "$ref": "#/components/schemas/RequestId" },
++          "result": { "$ref": "#/components/schemas/ExternalTokenInfo" }
++        }
++      },
++      "JsonRpcErrorResponse": {
++        "type": "object",
++        "required": ["jsonrpc", "id", "error"],
++        "additionalProperties": false,
++        "properties": {
++          "jsonrpc": {
++            "type": "string",
++            "enum": ["2.0"]
++          },
++          "id": {
++            "description": "Echoes the request identifier, or is null when the request identifier cannot be determined.",
++            "oneOf": [
++              { "type": "integer", "nullable": true },
++              { "type": "string" }
++            ]
++          },
++          "error": { "$ref": "#/components/schemas/JsonRpcError" }
++        }
++      },
++      "JsonRpcError": {
++        "type": "object",
++        "required": ["code", "message"],
++        "properties": {
++          "code": {
++            "type": "integer",
++            "description": "JSON-RPC error code. Proposed application mapping: 105 = TokenNotFoundException.",
++            "example": 105
++          },
++          "message": {
++            "type": "string",
++            "description": "Error description without sensitive token values.",
++            "example": "Token information not found"
++          },
++          "data": {
++            "description": "Optional additional error information."
++          }
++        }
++      },
++      "TokenRequest": {
++        "type": "object",
++        "required": ["grant_type", "client_id", "refresh_token"],
++        "additionalProperties": false,
++        "properties": {
++          "grant_type": {
++            "type": "string",
++            "enum": ["refresh_token"],
++            "description": "Only the refresh_token grant is currently supported by this legacy endpoint."
++          },
++          "client_id": {
++            "type": "string",
++            "enum": ["legacy"],
++            "description": "Fixed legacy client identifier."
++          },
++          "refresh_token": {
++            "type": "string",
++            "format": "password",
++            "writeOnly": true,
++            "description": "External refresh token to exchange for an access token. Treat as a sensitive credential."
++          }
++        }
++      },
++      "TokenSuccessResponse": {
++        "type": "object",
++        "required": ["token_type", "access_token"],
++        "additionalProperties": false,
++        "properties": {
++          "token_type": {
++            "type": "string",
++            "enum": ["bearer"]
++          },
++          "access_token": {
++            "type": "string",
++            "format": "password",
++            "writeOnly": true,
++            "description": "Access token issued for the supplied refresh token. Treat as a sensitive credential."
++          }
++        }
++      },
++      "TokenErrorResponse": {
++        "type": "object",
++        "required": ["error", "error_description"],
++        "additionalProperties": false,
++        "properties": {
++          "error": {
++            "type": "string",
++            "description": "OAuth-style error code.",
++            "example": "invalid_grant"
++          },
++          "error_description": {
++            "type": "string",
++            "description": "Human-readable error detail without sensitive token values.",
++            "example": "The refresh token invalid or expired"
++          }
++        }
++      }
++    }
++  }
++}
+
