@@ -128,7 +128,7 @@ function runInChrome(review, hash = '') {
   const dir = mkdtempSync(join(tmpdir(), 'supervise-study-'));
   const page = join(dir, 'review.html');
   writeFileSync(page, buildHtml(review).replace('</body>', () => `<script>${DRIVER}</script>\n</body>`));
-  const run = spawnSync(CHROME, ['--headless=new', '--disable-gpu', '--no-sandbox', '--virtual-time-budget=8000', '--dump-dom', `file://${page}${hash}`], { encoding: 'utf8', timeout: 90000 });
+  const run = spawnSync(CHROME, ['--headless=new', '--disable-gpu', '--no-sandbox', '--virtual-time-budget=8000', '--dump-dom', `file://${page}${hash}`], { encoding: 'utf8', timeout: 90000, maxBuffer: 16 * 1024 * 1024 });
   const match = run.stdout.match(/<pre id="e2e-out">([\s\S]*?)<\/pre>/);
   assert.ok(match, `el guion no terminó. stderr: ${run.stderr.slice(-400)}`);
   const unescape = (s) => s.replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
@@ -174,7 +174,7 @@ function probe(review, script) {
       const pre = document.createElement('pre'); pre.id = 'e2e-out'; pre.textContent = JSON.stringify(r); document.body.append(pre);
     })();`;
   writeFileSync(page, buildHtml(review).replace('</body>', () => `<script>${wrapped}</script>\n</body>`));
-  const run = spawnSync(CHROME, ['--headless=new', '--disable-gpu', '--no-sandbox', '--virtual-time-budget=5000', '--dump-dom', `file://${page}`], { encoding: 'utf8', timeout: 90000 });
+  const run = spawnSync(CHROME, ['--headless=new', '--disable-gpu', '--no-sandbox', '--virtual-time-budget=5000', '--dump-dom', `file://${page}`], { encoding: 'utf8', timeout: 90000, maxBuffer: 16 * 1024 * 1024 });
   const match = run.stdout.match(/<pre id="e2e-out">([\s\S]*?)<\/pre>/);
   assert.ok(match, `el guion no terminó. stderr: ${run.stderr.slice(-400)}`);
   return JSON.parse(match[1].replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&'));
@@ -228,7 +228,7 @@ test('una revisión 1.0 sin study: el aprendiz queda deshabilitado y el desafío
       const pre = document.createElement('pre'); pre.id = 'e2e-out'; pre.textContent = JSON.stringify(r); document.body.append(pre);
     })();`;
   writeFileSync(page, buildHtml(review).replace('</body>', () => `<script>${probe}</script>\n</body>`));
-  const run = spawnSync(CHROME, ['--headless=new', '--disable-gpu', '--no-sandbox', '--virtual-time-budget=5000', '--dump-dom', `file://${page}`], { encoding: 'utf8', timeout: 90000 });
+  const run = spawnSync(CHROME, ['--headless=new', '--disable-gpu', '--no-sandbox', '--virtual-time-budget=5000', '--dump-dom', `file://${page}`], { encoding: 'utf8', timeout: 90000, maxBuffer: 16 * 1024 * 1024 });
   const match = run.stdout.match(/<pre id="e2e-out">([\s\S]*?)<\/pre>/);
   assert.ok(match, `el guion no terminó. stderr: ${run.stderr.slice(-400)}`);
   const results = JSON.parse(match[1].replace(/&quot;/g, '"'));

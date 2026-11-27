@@ -171,7 +171,7 @@ test('recorrido completo en Chrome: flashcards, test, escenarios y final', { ski
   writeFileSync(page, buildHtml(example).replace('</body>', () => `<script>${DRIVER}</script>\n</body>`));
 
   // El HTML abre en el inicio de Equinox; el mapa de misiones es la vista #desafio.
-  const run = spawnSync(CHROME, ['--headless=new', '--disable-gpu', '--no-sandbox', '--virtual-time-budget=8000', '--dump-dom', `file://${page}#desafio`], { encoding: 'utf8', timeout: 90000 });
+  const run = spawnSync(CHROME, ['--headless=new', '--disable-gpu', '--no-sandbox', '--virtual-time-budget=8000', '--dump-dom', `file://${page}#desafio`], { encoding: 'utf8', timeout: 90000, maxBuffer: 16 * 1024 * 1024 });
   const match = run.stdout.match(/<pre id="e2e-out">([\s\S]*?)<\/pre>/);
   assert.ok(match, `el guion no terminó. stderr: ${run.stderr.slice(-400)}`);
   const unescape = (s) => s.replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
