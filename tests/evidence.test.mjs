@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { verifyEvidence } from '../.claude/skills/supervise/scripts/lib/evidence.mjs';
+import { verifyEvidence } from '../.claude/skills/la-senda/scripts/lib/evidence.mjs';
 import { execFileSync } from 'node:child_process';
 
 const FILE = 'src/token.ts';
@@ -143,7 +143,7 @@ test('validate --repo y build --repo rechazan un review con evidencias falsas', 
   writeFileSync(reviewPath, JSON.stringify(minimal));
   const cli = (script, ...args) => {
     try {
-      execFileSync('node', [join(process.cwd(), '.claude/skills/supervise/scripts', script), ...args], { stdio: ['ignore', 'pipe', 'pipe'] });
+      execFileSync('node', [join(process.cwd(), '.claude/skills/la-senda/scripts', script), ...args], { stdio: ['ignore', 'pipe', 'pipe'] });
       return 0;
     } catch (e) { return e.status; }
   };

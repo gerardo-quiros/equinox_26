@@ -4,13 +4,13 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 
-const SKILL = new URL('../.claude/skills/supervise/', import.meta.url);
+const SKILL = new URL('../.claude/skills/la-senda/', import.meta.url);
 const read = (rel) => readFileSync(new URL(rel, SKILL), 'utf8');
 const skillMd = read('SKILL.md');
 
 test('el frontmatter tiene name (igual a la carpeta) y description', () => {
   const front = skillMd.match(/^---\n([\s\S]*?)\n---/)?.[1] ?? '';
-  assert.match(front, /^name: supervise$/m);
+  assert.match(front, /^name: la-senda$/m);
   assert.match(front, /^description: .{80,}$/m, 'la descripción debe explicar cuándo usarla');
   assert.match(front, /^argument-hint: /m);
 });

@@ -39,7 +39,7 @@ function detectRoot(cwd) {
   try {
     root = execFileSync('git', ['-C', cwd, 'rev-parse', '--show-toplevel'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
   } catch {
-    throw new Error('No estás dentro de un repositorio git. /supervise necesita git para calcular la rama y el diff.');
+    throw new Error('No estás dentro de un repositorio git. /la-senda necesita git para calcular la rama y el diff.');
   }
   return root;
 }
@@ -172,7 +172,7 @@ export function collectContext({ cwd = process.cwd(), base: explicitBase = null,
   try {
     head = git(root, ['rev-parse', 'HEAD']).trim();
   } catch {
-    throw new Error('El repositorio no tiene commits todavía. Haz al menos un commit antes de usar /supervise.');
+    throw new Error('El repositorio no tiene commits todavía. Haz al menos un commit antes de usar /la-senda.');
   }
 
   const currentBranch = tryGit(root, ['symbolic-ref', '--short', '-q', 'HEAD']);
