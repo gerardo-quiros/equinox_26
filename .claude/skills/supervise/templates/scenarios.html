@@ -1,0 +1,55 @@
+<!-- Nivel 03 · Escenarios: una pantalla para escribir cada respuesta y otra de resumen con «Copiar respuestas». -->
+
+<template id="tpl-scenarios-write">
+  <div class="meta">
+    <span class="tag blue">Nivel 03 · Final</span>
+    <span class="tag amber">Escenario</span>
+    <span class="count" data-slot="count"></span>
+  </div>
+
+  <h2 class="q-title" data-slot="title"></h2>
+  <div class="sit"><div class="lb">Situación</div><p data-slot="situation"></p></div>
+  <p class="ask" data-slot="prompt"></p>
+
+  <label class="ta-lb" for="answer">
+    Tu respuesta
+    <span><span class="saved" data-slot="saved" hidden>Borrador guardado</span> <span data-slot="words"></span></span>
+  </label>
+  <textarea id="answer" data-slot="answer" data-focus="answer" placeholder="Describe qué ocurre y qué harías…"></textarea>
+
+  <div data-slot="evidence"></div>
+  <div class="dots" data-slot="dots" role="img"></div>
+
+  <div class="actions">
+    <button type="button" class="btn ghost" data-action="prev" data-slot="prev">
+      <svg><use href="#i-back"/></svg>Anterior
+    </button>
+    <button type="button" class="btn ghost sm" data-action="evidence" data-focus="evidence">
+      <svg><use href="#i-code"/></svg><span data-slot="evidence-text"></span>
+    </button>
+    <button type="button" class="btn green" data-action="next">
+      <span data-slot="next-text"></span><svg><use href="#i-arrow"/></svg>
+    </button>
+  </div>
+</template>
+
+<template id="tpl-scenarios-summary">
+  <div class="meta">
+    <span class="tag blue">Nivel 03 · Final</span>
+    <span class="tag amber">Resumen</span>
+    <span class="count" data-slot="count"></span>
+  </div>
+
+  <h2 class="q-title">Tus respuestas están listas</h2>
+  <p class="prompt">Copia las preguntas y tus respuestas, y pégalas en el chat con el agente para que las evalúe.</p>
+
+  <ul class="sum" data-slot="list"></ul>
+
+  <div class="copyrow">
+    <button type="button" class="btn blue big" data-action="copy" data-slot="copy" data-focus="copy">
+      <svg data-slot="copy-icon"><use href="#i-clip"/></svg><span data-slot="copy-text"></span>
+    </button>
+    <p class="copyhint" data-slot="copy-hint"></p>
+    <textarea class="manual" data-slot="manual" readonly hidden aria-label="Texto para copiar manualmente"></textarea>
+  </div>
+</template>

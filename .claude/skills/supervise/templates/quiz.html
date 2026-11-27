@@ -1,0 +1,37 @@
+<!-- Nivel 02 · Test (selección simple y múltiple). Las opciones las crea app.js a partir de review.json. -->
+<template id="tpl-quiz">
+  <div class="meta">
+    <span class="tag blue">Nivel 02 · Intermedio</span>
+    <span class="tag purple" data-slot="kind" hidden>Selección múltiple</span>
+    <span class="count" data-slot="count"></span>
+  </div>
+
+  <h2 class="q-title" data-slot="title"></h2>
+  <p class="prompt" data-slot="prompt"></p>
+
+  <!-- Solo en selección múltiple -->
+  <div class="info" data-slot="info" hidden>
+    <span>Selecciona exactamente <strong data-slot="need"></strong> respuestas válidas</span>
+    <span class="n" data-slot="counter"></span>
+  </div>
+
+  <div class="opts" data-slot="options" role="group" aria-label="Opciones"></div>
+
+  <!-- Resultado de la última confirmación -->
+  <div class="fb" data-slot="feedback" role="status" aria-live="polite" hidden>
+    <svg data-slot="fb-icon"><use href="#i-ok"/></svg>
+    <div><h3 data-slot="fb-title"></h3><div data-slot="fb-body"></div></div>
+  </div>
+
+  <div data-slot="evidence"></div>
+
+  <div class="actions">
+    <span class="hint" data-slot="hint"></span>
+    <button type="button" class="btn ghost" data-action="evidence" data-slot="why" data-focus="why" hidden>
+      <svg><use href="#i-code"/></svg><span data-slot="why-text"></span>
+    </button>
+    <button type="button" class="btn blue" data-action="primary" data-slot="primary" data-focus="primary">
+      <span data-slot="primary-text"></span><svg><use href="#i-arrow"/></svg>
+    </button>
+  </div>
+</template>

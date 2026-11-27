@@ -1,0 +1,131 @@
+// Validación completa de review.json: estructura (schema) + semántica.
+// Sin dependencias; funciona en Node y en el navegador. El schema se recibe como
+// parámetro para no depender del sistema de archivos.
+
+import { validateAgainstSchema } from './schema-subset.mjs';
+
+export const RECOMMENDED = {
+  flashcards: { min: 6, max: 10 },
+  quiz: { min: 3, max: 4 },
+  scenarios: { min: 1, max: 2 },
+};
+
+const MAX_SNIPPET_LINES = 60;
+const QUESTION_GROUPS = ['flashcards', 'quiz', 'scenarios'];
+
+/**
+ * @returns {{valid: boolean, errors: {path, message}[], warnings: {path, message}[]}}
+ */
+export function validateReview(review, schema) {
+  const errors = validateAgainstSchema(review, schema);
+  const warnings = [];
+  // Las comprobaciones semánticas asumen una estructura correcta.
+  if (errors.length) return { valid: false, errors, warnings };
+
+  const err = (path, message) => errors.push({ path, message });
+  const warn = (path, message) => warnings.push({ path, message });
+
+  // 1. Identificadores únicos en todo el documento.
+  const seen = new Map();
+  const groups = ['requirements', 'focuses', ...QUESTION_GROUPS];
+  for (const group of groups) {
+    (review[group] ?? []).forEach((item, i) => {
+      const path = `${group}[${i}].id`;
+      if (seen.has(item.id)) err(path, `id "${item.id}" duplicado (ya usado en ${seen.get(item.id)})`);
+      else seen.set(item.id, path);
+    });
+  }
+
+  // 2. Referencias a requisitos y focos.
+  const requirementIds = new Set((review.requirements ?? []).map((r) => r.id));
+  const focusIds = new Set(review.focuses.map((f) => f.id));
+
+  review.focuses.forEach((focus, i) => {
+    (focus.requirementIds ?? []).forEach((id, j) => {
+      if (!requirementIds.has(id)) err(`focuses[${i}].requirementIds[${j}]`, `el requisito "${id}" no existe en requirements`);
+    });
+  });
+
+  const referenced = new Set();
+  for (const group of QUESTION_GROUPS) {
+    review[group].forEach((item, i) => {
+      item.focusIds.forEach((id, j) => {
+        if (!focusIds.has(id)) err(`${group}[${i}].focusIds[${j}]`, `el foco "${id}" no existe en focuses`);
+        referenced.add(id);
+      });
+    });
+  }
+
+  // 3. Reglas de las preguntas de test.
+  review.quiz.forEach((q, i) => checkQuizItem(q, `quiz[${i}]`, err));
+
+  // 4. Evidencias.
+  const evidenceOwners = ['focuses', ...QUESTION_GROUPS];
+  for (const group of evidenceOwners) {
+    review[group].forEach((item, i) => {
+      item.evidence.forEach((ev, j) => checkEvidence(ev, `${group}[${i}].evidence[${j}]`, err));
+    });
+  }
+
+  // 5. Avisos de calidad (no bloquean).
+  for (const group of QUESTION_GROUPS) {
+    const { min } = RECOMMENDED[group];
+    if (review[group].length < min) {
+      warn(group, `hay ${review[group].length}; se recomiendan al menos ${min}. Correcto solo si el cambio es pequeño.`);
+    }
+  }
+  review.focuses.forEach((focus, i) => {
+    if (!referenced.has(focus.id)) {
+      const level = focus.priority === 'high' ? 'de prioridad alta ' : '';
+      warn(`focuses[${i}]`, `el foco ${level}"${focus.id}" no se trabaja en ninguna pregunta`);
+    }
+  });
+
+  return { valid: errors.length === 0, errors, warnings };
+}
+
+function checkQuizItem(q, path, err) {
+  const optionIds = q.options.map((o) => o.id);
+  optionIds.forEach((id, j) => {
+    if (optionIds.indexOf(id) !== j) err(`${path}.options[${j}].id`, `id de opción "${id}" duplicado`);
+  });
+  q.correct.forEach((id, j) => {
+    if (!optionIds.includes(id)) err(`${path}.correct[${j}]`, `"${id}" no es ninguna de las opciones`);
+  });
+  q.options.forEach((o, j) => {
+    if (!q.correct.includes(o.id) && !o.why) {
+      err(`${path}.options[${j}].why`, `la opción incorrecta "${o.id}" necesita "why": se muestra si el humano la elige`);
+    }
+  });
+
+  if (q.kind === 'single') {
+    if (q.correct.length !== 1) err(`${path}.correct`, 'una pregunta single tiene exactamente una respuesta correcta');
+    return;
+  }
+
+  // multiple: la interfaz pide seleccionar exactamente tantas como respuestas correctas haya.
+  if (optionIds.length < 3) err(`${path}.options`, 'una pregunta multiple necesita al menos 3 opciones');
+  if (q.correct.length < 2) err(`${path}.correct`, 'una pregunta multiple tiene al menos 2 respuestas correctas; con una sola usa single');
+  if (q.correct.length >= optionIds.length) err(`${path}.correct`, 'no pueden ser correctas todas las opciones: la pregunta no discrimina');
+}
+
+function checkEvidence(ev, path, err) {
+  const lineCount = ev.snippet.split('\n').length;
+  if (lineCount > MAX_SNIPPET_LINES) {
+    err(`${path}.snippet`, `máximo ${MAX_SNIPPET_LINES} líneas (tiene ${lineCount}); recorta al fragmento relevante`);
+  }
+  if (ev.lines && ev.lines.end < ev.lines.start) {
+    err(`${path}.lines`, `end (${ev.lines.end}) no puede ser menor que start (${ev.lines.start})`);
+  }
+  if (ev.highlight) {
+    if (!ev.lines) {
+      err(`${path}.highlight`, 'highlight requiere lines');
+    } else {
+      ev.highlight.forEach((n, k) => {
+        if (n < ev.lines.start || n > ev.lines.end) {
+          err(`${path}.highlight[${k}]`, `la línea ${n} está fuera del rango ${ev.lines.start}–${ev.lines.end}`);
+        }
+      });
+    }
+  }
+}

@@ -1,0 +1,46 @@
+<!-- Nivel 01 · Flashcards. Los data-slot los rellena app.js con textContent; los data-action, sus eventos. -->
+<template id="tpl-flashcards">
+  <div class="meta">
+    <span class="tag blue">Nivel 01 · Iniciación</span>
+    <span class="tag purple">Flashcards</span>
+    <span class="count" data-slot="count"></span>
+  </div>
+
+  <!-- Cara delantera -->
+  <section class="fc front" data-slot="front-face" data-action="flip">
+    <div class="fc-top">
+      <span class="fc-label">Pregunta</span>
+      <span class="chip" data-slot="chip"></span>
+    </div>
+    <p class="fc-q" data-slot="front"></p>
+  </section>
+
+  <!-- Cara trasera -->
+  <section class="fc back" data-slot="back-face" hidden>
+    <div class="fc-top">
+      <span class="fc-label">Respuesta / Explicación</span>
+      <span class="revealed">✨ Revelado</span>
+    </div>
+    <h3 data-slot="title"></h3>
+    <p class="a" data-slot="back"></p>
+    <div data-slot="evidence"></div>
+  </section>
+
+  <div class="center">
+    <button type="button" class="btn light" data-action="flip" data-focus="flip">
+      <svg><use href="#i-flip"/></svg><span data-slot="flip-text"></span>
+    </button>
+  </div>
+
+  <div class="dots" data-slot="dots" role="img"></div>
+
+  <div class="actions">
+    <button type="button" class="btn ghost" data-action="prev" data-slot="prev">
+      <svg><use href="#i-back"/></svg>Anterior
+    </button>
+    <span class="hint"><kbd>Espacio</kbd> para voltear</span>
+    <button type="button" class="btn green" data-action="next" data-slot="next">
+      <span data-slot="next-text"></span><svg><use href="#i-arrow"/></svg>
+    </button>
+  </div>
+</template>

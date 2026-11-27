@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title><!--@title--></title>
+<style><!--@styles--></style>
+</head>
+<body>
+
+<!-- Iconos reutilizables -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-ok" viewBox="0 0 24 24"><circle cx="12" cy="12" r="11" fill="currentColor"/><path d="M7 12.5l3.2 3.2L17 9" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-bad" viewBox="0 0 24 24"><circle cx="12" cy="12" r="11" fill="currentColor"/><path d="M8 8l8 8M16 8l-8 8" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/></symbol>
+  <symbol id="i-radio" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="i-box" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="i-boxok" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" rx="4" fill="currentColor"/><path d="M7 12.5l3.2 3.2L17 9" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14m-6-6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="M19 12H5m6-6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-flip" viewBox="0 0 24 24"><path d="M4 12a8 8 0 0 1 13.7-5.6L20 8.7M20 4v4.7h-4.7M20 12a8 8 0 0 1-13.7 5.6L4 15.3M4 20v-4.7h4.7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-code" viewBox="0 0 24 24"><path d="M8 7l-5 5 5 5M16 7l5 5-5 5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-clip" viewBox="0 0 24 24"><rect x="6" y="4" width="12" height="17" rx="2" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M9 11h6M9 15h4" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path d="M5 5l14 14M19 5L5 19" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></symbol>
+  <symbol id="i-cards" viewBox="0 0 24 24"><rect x="3" y="7" width="13" height="13" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 4h11a2 2 0 0 1 2 2v11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="i-quiz" viewBox="0 0 24 24"><path d="M4 7l2 2 3-3M4 15l2 2 3-3M12 8h8M12 16h8" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-scroll" viewBox="0 0 24 24"><path d="M6 4h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zM8 9h8M8 13h8M8 17h5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+</svg>
+
+<main class="stage" id="stage">
+
+  <!-- Cabecera: marca, título y progreso de la misión -->
+  <header class="top">
+    <div class="banner" aria-hidden="true"><span class="star">★</span>SUPERVISE</div>
+
+    <section class="panel rivets title">
+      <h1>Mapa de misiones: niveles por conquistar</h1>
+      <p>Guía a tu héroe por los senderos del código, descubre lo que merece tu atención y conquista cada nivel.</p>
+    </section>
+
+    <section class="panel rivets mission" aria-label="Progreso de la misión">
+      <p class="mission-name">Misión: <span id="mission-name"></span></p>
+      <div class="bar" id="bar" role="progressbar" aria-label="Niveles conquistados" aria-valuemin="0" aria-valuemax="3" aria-valuenow="0"><i id="bar-fill"></i></div>
+      <p class="bar-text" id="bar-text"></p>
+    </section>
+  </header>
+
+  <!-- Mensaje final: solo cuando se han conquistado los tres niveles -->
+  <section class="panel rivets finale" id="finale" hidden aria-live="polite">
+    <h2>¡Has finalizado la revisión!</h2>
+    <p>Has conquistado los tres niveles. Si aún no lo has hecho, copia tus respuestas de los escenarios y pégalas en el chat con el agente para que las evalúe.</p>
+  </section>
+
+  <!-- Héroe: Padi, y el maestro Padi al terminar -->
+  <section class="hero" id="hero">
+    <div class="avatar">
+      <img id="img-padi" src="asset:padi.jpg" alt="Padi">
+      <img id="img-master" src="asset:master_padi.jpg" alt="Maestro Padi" hidden>
+    </div>
+    <p class="hero-label"><i></i><span id="hero-label">Padi · Guardián de PR</span></p>
+  </section>
+
+  <!-- Niveles: se pueden hacer en cualquier orden -->
+  <nav class="levels" aria-label="Niveles">
+    <svg class="paths" viewBox="0 0 100 20" preserveAspectRatio="none" aria-hidden="true">
+      <path vector-effect="non-scaling-stroke" d="M50 0 C50 12 16.7 6 16.7 20"/>
+      <path vector-effect="non-scaling-stroke" d="M50 0 V20"/>
+      <path vector-effect="non-scaling-stroke" d="M50 0 C50 12 83.3 6 83.3 20"/>
+    </svg>
+
+    <button type="button" class="level" data-level="flashcards">
+      <span class="lvl-ribbon">En encuentro</span>
+      <span class="lvl-top"><span>Nivel 01</span><span class="lvl-chip">✓ Conquistado</span></span>
+      <span class="lvl-icon"><svg><use href="#i-cards"/></svg></span>
+      <span class="lvl-sub">Iniciación</span>
+      <strong class="lvl-title">Flashcards</strong>
+      <span class="lvl-count"></span>
+    </button>
+
+    <button type="button" class="level" data-level="quiz">
+      <span class="lvl-ribbon">En encuentro</span>
+      <span class="lvl-top"><span>Nivel 02</span><span class="lvl-chip">✓ Conquistado</span></span>
+      <span class="lvl-icon"><svg><use href="#i-quiz"/></svg></span>
+      <span class="lvl-sub">Intermedio</span>
+      <strong class="lvl-title">Test con opciones</strong>
+      <span class="lvl-count"></span>
+    </button>
+
+    <button type="button" class="level" data-level="scenarios">
+      <span class="lvl-ribbon">En encuentro</span>
+      <span class="lvl-top"><span>Nivel 03</span><span class="lvl-chip">✓ Conquistado</span></span>
+      <span class="lvl-icon"><svg><use href="#i-scroll"/></svg></span>
+      <span class="lvl-sub">Final</span>
+      <strong class="lvl-title">Escenarios</strong>
+      <span class="lvl-count"></span>
+    </button>
+  </nav>
+</main>
+
+<!-- Modal: solo la tarjeta del nivel. Su contenido sale de las plantillas de abajo. -->
+<dialog id="level">
+  <div class="frame panel rivets">
+    <div class="ribbon" id="level-ribbon"></div>
+    <button type="button" class="close" id="level-close" aria-label="Cerrar"><svg><use href="#i-close"/></svg></button>
+    <div class="card" id="level-body"></div>
+  </div>
+</dialog>
+
+<!--@templates-->
+
+<script type="application/json" id="review-data"><!--@data--></script>
+<script><!--@script--></script>
+</body>
+</html>

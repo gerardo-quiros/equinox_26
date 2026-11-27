@@ -1,0 +1,328 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "supervise/review.schema.json",
+  "title": "Supervise · Revisión",
+  "description": "Contrato del JSON que produce el motor de análisis y consume el renderizador. Todos los textos son texto plano. Formato en línea permitido: `código` con comillas invertidas y **negrita** con dobles asteriscos. Nunca HTML.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "meta", "focuses", "flashcards", "quiz", "scenarios"],
+  "properties": {
+    "schemaVersion": { "const": "1.0" },
+    "meta": { "$ref": "#/$defs/meta" },
+    "requirements": {
+      "description": "Requisitos de la especificación a los que se refieren los focos. Opcional si el proyecto no tiene specs.",
+      "type": "array",
+      "maxItems": 30,
+      "items": { "$ref": "#/$defs/requirement" }
+    },
+    "focuses": {
+      "description": "Puntos que merecen criterio humano. Toda pregunta se deriva de al menos uno.",
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 12,
+      "items": { "$ref": "#/$defs/focus" }
+    },
+    "flashcards": {
+      "description": "Nivel 01. Recomendado: 6–10.",
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 10,
+      "items": { "$ref": "#/$defs/flashcard" }
+    },
+    "quiz": {
+      "description": "Nivel 02. Recomendado: 3–4.",
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 4,
+      "items": { "$ref": "#/$defs/quizItem" }
+    },
+    "scenarios": {
+      "description": "Nivel 03. Recomendado: 1–2.",
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 2,
+      "items": { "$ref": "#/$defs/scenario" }
+    }
+  },
+  "$defs": {
+    "label": { "type": "string", "pattern": "\\S", "maxLength": 120 },
+    "shortText": { "type": "string", "pattern": "\\S", "maxLength": 300 },
+    "text": { "type": "string", "pattern": "\\S", "maxLength": 600 },
+    "longText": { "type": "string", "pattern": "\\S", "maxLength": 1200 },
+    "sha": { "type": "string", "pattern": "^[0-9a-f]{7,40}$" },
+    "relativePath": {
+      "description": "Ruta relativa a la raíz del repositorio. Sin '/' inicial, sin unidades de Windows y sin segmentos '..'.",
+      "type": "string",
+      "maxLength": 300,
+      "pattern": "^(?![/\\\\])(?![A-Za-z]:)(?!.*(^|[/\\\\])\\.\\.([/\\\\]|$))\\S.*$"
+    },
+    "focusRefs": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 3,
+      "uniqueItems": true,
+      "items": { "type": "string", "pattern": "^F[0-9]+$" }
+    },
+
+    "meta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reviewId", "project", "title", "summary", "generatedAt", "source"],
+      "properties": {
+        "reviewId": {
+          "description": "Identificador estable de la revisión. Se usa como clave para guardar el progreso en el navegador.",
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._-]{1,120}$"
+        },
+        "project": { "$ref": "#/$defs/label" },
+        "title": { "$ref": "#/$defs/label" },
+        "missionName": {
+          "description": "Nombre narrativo de la misión, p. ej. «Valle de la Autenticación». Si falta, se usa title.",
+          "type": "string",
+          "pattern": "\\S",
+          "maxLength": 60
+        },
+        "summary": { "$ref": "#/$defs/text" },
+        "generatedAt": { "type": "string", "format": "date-time" },
+        "generator": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["agent"],
+          "properties": {
+            "agent": { "$ref": "#/$defs/label" },
+            "model": { "$ref": "#/$defs/label" }
+          }
+        },
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "base", "head", "mergeBase", "commit", "dirty"],
+          "properties": {
+            "type": { "enum": ["branch"] },
+            "base": { "$ref": "#/$defs/label" },
+            "head": { "$ref": "#/$defs/label" },
+            "mergeBase": { "$ref": "#/$defs/sha" },
+            "commit": { "$ref": "#/$defs/sha" },
+            "dirty": {
+              "description": "true si la revisión incluye cambios sin commitear.",
+              "type": "boolean"
+            }
+          }
+        },
+        "stats": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["filesChanged", "additions", "deletions"],
+          "properties": {
+            "filesChanged": { "type": "integer", "minimum": 0 },
+            "additions": { "type": "integer", "minimum": 0 },
+            "deletions": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "specs": {
+          "description": "Especificaciones consultadas durante el análisis.",
+          "type": "array",
+          "maxItems": 10,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["path"],
+            "properties": {
+              "path": { "$ref": "#/$defs/relativePath" },
+              "title": { "$ref": "#/$defs/label" }
+            }
+          }
+        }
+      }
+    },
+
+    "requirement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "source", "text"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^R[0-9]+$" },
+        "source": { "$ref": "#/$defs/relativePath" },
+        "ref": {
+          "description": "Identificador del requisito en su documento, p. ej. «AC-4».",
+          "type": "string",
+          "pattern": "\\S",
+          "maxLength": 40
+        },
+        "text": { "$ref": "#/$defs/text" }
+      }
+    },
+
+    "evidence": {
+      "description": "Fragmento verificable que respalda una afirmación. El snippet es obligatorio porque el HTML no puede leer el repositorio.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "file", "snippet"],
+      "properties": {
+        "kind": { "enum": ["code", "diff", "spec", "test", "config", "doc"] },
+        "file": { "$ref": "#/$defs/relativePath" },
+        "lines": {
+          "description": "Rango de líneas del snippet en el archivo (en un diff, en la versión nueva).",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["start", "end"],
+          "properties": {
+            "start": { "type": "integer", "minimum": 1 },
+            "end": { "type": "integer", "minimum": 1 }
+          }
+        },
+        "highlight": {
+          "description": "Números de línea absolutos a resaltar. Requiere lines y deben estar dentro del rango.",
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 20,
+          "uniqueItems": true,
+          "items": { "type": "integer", "minimum": 1 }
+        },
+        "language": {
+          "description": "Lenguaje para el resaltado: ts, py, md, diff, json…",
+          "type": "string",
+          "pattern": "^[a-z0-9+#-]{1,20}$"
+        },
+        "snippet": {
+          "description": "Máximo 60 líneas (se comprueba en la validación semántica).",
+          "type": "string",
+          "pattern": "\\S",
+          "maxLength": 4000
+        },
+        "note": { "$ref": "#/$defs/shortText" }
+      }
+    },
+    "evidenceList": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 5,
+      "items": { "$ref": "#/$defs/evidence" }
+    },
+
+    "focus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "priority", "basis", "title", "why", "evidence"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^F[0-9]+$" },
+        "type": {
+          "description": "change: cambio relevante · decision: decisión arquitectónica · risk: riesgo potencial · requirement-gap: desviación o hueco frente a requisitos · test-gap: comportamiento sin pruebas.",
+          "enum": ["change", "decision", "risk", "requirement-gap", "test-gap"]
+        },
+        "priority": {
+          "description": "Orientativa; no es una garantía.",
+          "enum": ["high", "medium", "low"]
+        },
+        "basis": {
+          "description": "observed: se ve directamente en el código o el diff · inferred: deducción que el humano debe confirmar.",
+          "enum": ["observed", "inferred"]
+        },
+        "title": { "$ref": "#/$defs/label" },
+        "why": {
+          "description": "Por qué conviene que lo mire un humano.",
+          "$ref": "#/$defs/text"
+        },
+        "requirementIds": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 5,
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^R[0-9]+$" }
+        },
+        "evidence": { "$ref": "#/$defs/evidenceList" }
+      }
+    },
+
+    "flashcard": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "focusIds", "front", "title", "back", "evidence"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^C[0-9]+$" },
+        "focusIds": { "$ref": "#/$defs/focusRefs" },
+        "category": {
+          "enum": ["method", "default-value", "code-detail", "behavior", "config", "data-model", "dependency"]
+        },
+        "front": { "$ref": "#/$defs/shortText" },
+        "title": {
+          "description": "Titular de la respuesta, en texto plano y sin formato (se ve en la cara trasera).",
+          "$ref": "#/$defs/label"
+        },
+        "back": { "$ref": "#/$defs/text" },
+        "evidence": {
+          "description": "La tarjeta solo tiene espacio para 1–2 fragmentos.",
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 2,
+          "items": { "$ref": "#/$defs/evidence" }
+        }
+      }
+    },
+
+    "quizItem": {
+      "description": "single: 2–6 opciones y una correcta (incluye verdadero/falso como dos opciones) · multiple: 3–6 opciones y 2 o más correctas, sin que lo sean todas. En multiple la interfaz pide seleccionar exactamente tantas como correctas haya.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "focusIds", "kind", "title", "prompt", "options", "correct", "explanation", "evidence"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^Q[0-9]+$" },
+        "focusIds": { "$ref": "#/$defs/focusRefs" },
+        "kind": { "enum": ["single", "multiple"] },
+        "title": { "$ref": "#/$defs/label" },
+        "prompt": { "$ref": "#/$defs/text" },
+        "options": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 6,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "text"],
+            "properties": {
+              "id": { "type": "string", "pattern": "^[a-f]$" },
+              "text": { "$ref": "#/$defs/shortText" },
+              "detail": {
+                "description": "Texto secundario bajo el título de la opción. Se ve ANTES de responder: debe ser neutro y no desvelar si la opción es correcta.",
+                "$ref": "#/$defs/text"
+              },
+              "why": {
+                "description": "Por qué la opción es incorrecta. Obligatoria en las opciones incorrectas (se comprueba en la validación semántica). Se muestra tras confirmar, si el humano la ha elegido.",
+                "$ref": "#/$defs/text"
+              }
+            }
+          }
+        },
+        "correct": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 6,
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^[a-f]$" }
+        },
+        "explanation": {
+          "description": "Por qué la respuesta correcta lo es. Se muestra al acertar.",
+          "$ref": "#/$defs/longText"
+        },
+        "evidence": { "$ref": "#/$defs/evidenceList" }
+      }
+    },
+
+    "scenario": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "focusIds", "title", "situation", "prompt", "evidence"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^S[0-9]+$" },
+        "focusIds": { "$ref": "#/$defs/focusRefs" },
+        "title": { "$ref": "#/$defs/label" },
+        "situation": {
+          "description": "Contexto del «¿qué pasaría si…?». El humano responde por escrito y copia las respuestas al chat para que el agente las evalúe: el HTML no muestra ninguna respuesta de referencia.",
+          "$ref": "#/$defs/text"
+        },
+        "prompt": { "$ref": "#/$defs/shortText" },
+        "evidence": { "$ref": "#/$defs/evidenceList" }
+      }
+    }
+  }
+}
