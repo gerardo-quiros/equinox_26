@@ -33,7 +33,7 @@ export function buildHtml(review) {
 
   // Orden importante: los datos van al final para que ningún texto del JSON se confunda con un marcador.
   let html = read('templates/page.html');
-  html = replaceAll(html, '<!--@title-->', escapeHtml(`${mission} · Supervise`));
+  html = replaceAll(html, '<!--@title-->', escapeHtml(`${mission} · La Senda`));
   html = replaceAll(html, '<!--@styles-->', read('templates/styles.css'));
   html = replaceAll(html, '<!--@study-styles-->', read('templates/study.css'));
   html = replaceAll(html, '<!--@study-->', read('templates/study.html'));

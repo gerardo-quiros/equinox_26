@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "supervise/review.schema.json",
-  "title": "Supervise · Revisión",
+  "$id": "la-senda/review.schema.json",
+  "title": "La Senda · Revisión",
   "description": "Contrato del JSON que produce el motor de análisis y consume el renderizador. Todos los textos son texto plano. Formato en línea permitido: `código` con comillas invertidas y **negrita** con dobles asteriscos. Nunca HTML.",
   "type": "object",
   "additionalProperties": false,

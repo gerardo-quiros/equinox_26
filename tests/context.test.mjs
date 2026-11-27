@@ -1,12 +1,12 @@
 // Ejecutar con: node --test tests/
-// Cada prueba crea un repositorio git temporal con historia real y comprueba el contexto que recoge /supervise.
+// Cada prueba crea un repositorio git temporal con historia real y comprueba el contexto que recoge /la-senda.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { collectContext, contextSummary, splitPatch, isExcluded, slug, stampOf, githubWebUrl } from '../.claude/skills/supervise/scripts/lib/repo-context.mjs';
+import { collectContext, contextSummary, splitPatch, isExcluded, slug, stampOf, githubWebUrl } from '../.claude/skills/la-senda/scripts/lib/repo-context.mjs';
 
 const REVIEW_ID = /^[A-Za-z0-9._-]{1,120}$/;
 

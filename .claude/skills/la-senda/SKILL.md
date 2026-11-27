@@ -1,10 +1,10 @@
 ---
-name: supervise
-description: Revisa una feature, una rama o un cambio hecho por un agente. Explica cómo funciona el cambio (fase de estudio), detecta lo que merece criterio humano y genera una página interactiva con mapa del conocimiento, flashcards, test y escenarios, con evidencias del repositorio. Úsala cuando el usuario pida revisar, supervisar o evaluar una rama, un cambio o el trabajo del agente, o cuando escriba /supervise.
+name: la-senda
+description: Revisa una feature, una rama o un cambio hecho por un agente. Explica cómo funciona el cambio (fase de estudio), detecta lo que merece criterio humano y genera una página interactiva con mapa del conocimiento, flashcards, test y escenarios, con evidencias del repositorio. Úsala cuando el usuario pida revisar, supervisar o evaluar una rama, un cambio o el trabajo del agente, o cuando escriba /la-senda.
 argument-hint: [--base <rama>]
 ---
 
-# Supervise
+# La Senda
 
 Ayuda a una persona a entender y revisar lo importante de un cambio sin leerlo entero. Generas un único `review.html` con dos fases:
 

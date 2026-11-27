@@ -2,10 +2,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { validateReview } from '../.claude/skills/supervise/scripts/lib/validate-review.mjs';
-import { validateAgainstSchema } from '../.claude/skills/supervise/scripts/lib/schema-subset.mjs';
+import { validateReview } from '../.claude/skills/la-senda/scripts/lib/validate-review.mjs';
+import { validateAgainstSchema } from '../.claude/skills/la-senda/scripts/lib/schema-subset.mjs';
 
-const SKILL = new URL('../.claude/skills/supervise/', import.meta.url);
+const SKILL = new URL('../.claude/skills/la-senda/', import.meta.url);
 const load = (rel) => JSON.parse(readFileSync(new URL(rel, SKILL), 'utf8'));
 
 const reviewSchema = load('schema/review.schema.json');

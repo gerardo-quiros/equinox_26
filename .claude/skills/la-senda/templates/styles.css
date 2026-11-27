@@ -1,4 +1,4 @@
-/* Supervise · estilos.
+/* La Senda · estilos.
    Sin recursos externos: las fuentes y las imágenes se incrustan al ensamblar (los "asset:…" los sustituye build). */
 
 @font-face { font-family: 'Cinzel'; src: url("asset:fonts/cinzel.woff2") format('woff2'); font-weight: 400 900; font-display: swap; }

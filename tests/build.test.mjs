@@ -2,9 +2,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { buildHtml } from '../.claude/skills/supervise/scripts/lib/build-html.mjs';
+import { buildHtml } from '../.claude/skills/la-senda/scripts/lib/build-html.mjs';
 
-const example = JSON.parse(readFileSync(new URL('../.claude/skills/supervise/examples/review.example.json', import.meta.url), 'utf8'));
+const example = JSON.parse(readFileSync(new URL('../.claude/skills/la-senda/examples/review.example.json', import.meta.url), 'utf8'));
 // Lo que haría que la página dependiera de internet (vacío si es autocontenida).
 function findExternalReferences(html) {
   const withoutData = html.replace(/<script type="application\/json"[^>]*>[\s\S]*?<\/script>/, '');
@@ -48,7 +48,7 @@ test('un marcador dentro de los datos no se sustituye', () => {
 });
 
 test('las plantillas de estudio no usan innerHTML', () => {
-  const js = readFileSync(new URL('../.claude/skills/supervise/templates/study.js', import.meta.url), 'utf8')
+  const js = readFileSync(new URL('../.claude/skills/la-senda/templates/study.js', import.meta.url), 'utf8')
     .replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, ''); // sin comentarios
   assert.equal(/innerHTML|outerHTML|insertAdjacentHTML|document\.write/.test(js), false);
 });
@@ -65,6 +65,6 @@ test('un texto malicioso no puede cerrar el script ni inyectar HTML', () => {
   const html = buildHtml(evil);
   assert.equal(html.includes('</script><img'), false);
   assert.equal(html.includes('</script><script>alert(1)'), false);
-  assert.match(html, /<title>&lt;b&gt;Misión&lt;\/b&gt; &amp; &quot;co&quot; · Supervise<\/title>/);
+  assert.match(html, /<title>&lt;b&gt;Misión&lt;\/b&gt; &amp; &quot;co&quot; · La Senda<\/title>/);
   assert.deepEqual(JSON.parse(dataBlock(html)), evil, 'el JSON se recupera igual');
 });

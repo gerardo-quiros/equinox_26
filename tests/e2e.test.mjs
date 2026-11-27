@@ -6,12 +6,12 @@ import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { buildHtml } from '../.claude/skills/supervise/scripts/lib/build-html.mjs';
+import { buildHtml } from '../.claude/skills/la-senda/scripts/lib/build-html.mjs';
 
 const CHROME = [process.env.CHROME, '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', '/usr/bin/google-chrome', '/usr/bin/chromium']
   .filter(Boolean).find((path) => existsSync(path));
 
-const example = JSON.parse(readFileSync(new URL('../.claude/skills/supervise/examples/review.example.json', import.meta.url), 'utf8'));
+const example = JSON.parse(readFileSync(new URL('../.claude/skills/la-senda/examples/review.example.json', import.meta.url), 'utf8'));
 
 // Guion que se ejecuta dentro de la página: usa solo clics y eventos, como una persona.
 const DRIVER = String.raw`

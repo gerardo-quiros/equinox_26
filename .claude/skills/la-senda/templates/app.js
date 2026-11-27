@@ -1,4 +1,4 @@
-/* Supervise · comportamiento de la página.
+/* La Senda · comportamiento de la página.
    Lee los datos de #review-data y pinta siempre con textContent (nunca innerHTML). */
 (() => {
   'use strict';
@@ -70,7 +70,7 @@
 
   /* ============ 2. Estado (solo en memoria; los borradores de escenarios, en localStorage) ============ */
 
-  const STORAGE_KEY = `supervise:${review.meta.reviewId}:scenarios`;
+  const STORAGE_KEY = `la-senda:${review.meta.reviewId}:scenarios`;
 
   function loadDrafts() {
     try {
