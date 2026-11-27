@@ -28,10 +28,7 @@ La prioridad es orientativa. Si dudas, usa `medium`.
 
 ### Observado frente a inferido
 
-- `observed`: lo ves directamente en el código o en el diff.
-- `inferred`: lo deduces. Las **ausencias** casi siempre son inferidas («no encuentro la implementación de AC-4»): la búsqueda puede haber fallado.
-
-Un foco inferido debe decirlo en `why` y pedir confirmación en una pregunta o en el escenario.
+Si un foco es una deducción y no algo que se ve en el código o en el diff, dilo en `why` y pide confirmación en una pregunta o en el escenario. Las **ausencias** casi siempre son deducciones («no encuentro la implementación de AC-4»): la búsqueda puede haber fallado.
 
 ## 2. Evidencias
 
@@ -39,7 +36,6 @@ Toda afirmación lleva evidencia verificable.
 
 - **Lee antes de citar.** Abre el archivo actual con Read y copia el texto exacto. No parafrasees ni reconstruyas de memoria.
 - **`lines`** es el rango real del fragmento en la versión actual del archivo (primera y última línea). **`snippet`** es ese texto, sin cambios, máximo 60 líneas.
-- **`highlight`** son solo las líneas que responden a la pregunta, dentro del rango.
 - **`file`** es relativa a la raíz del repositorio, sin `/` inicial.
 - **Diffs:** `kind: "diff"`, con las líneas del archivo nuevo y el snippet con `+`, `-` y espacio. Los diffs no se verifican línea a línea.
 - **Ausencias:** cita la especificación (`kind: "spec"`) y usa `note` para decir qué buscaste y dónde (p. ej. «búsqueda de `reset` y `recover` en `api/` sin resultados»).
@@ -56,18 +52,17 @@ La herramienta comprueba que cada fragmento coincide con el archivo (`build.mjs 
 - Pregunta concreta, con nombres reales del proyecto. Evita la trivia («¿qué es JWT?»).
 - No reveles la respuesta en el enunciado.
 
-### Flashcards (6–10; si el cambio es pequeño, menos)
+### Flashcards
 
 - `front`: una pregunta concreta sobre la implementación: dónde se guarda, qué valor tiene, qué método hace algo, qué pasa si falla.
 - `title`: el titular de la respuesta, corto.
 - `back`: una a tres frases con la respuesta y el porqué. Puede citar `código` y **negrita**.
 - `evidence`: uno o dos fragmentos, los de la respuesta.
-- `category` ayuda a agrupar: `method`, `default-value`, `code-detail`, `behavior`, `config`, `data-model`, `dependency`.
 
 Buena: «¿Cuánto tiempo dura una sesión inactiva?» → «1800 segundos, en `SESSION_TTL_SECONDS`».
 Mala: «¿Qué hace el código?».
 
-### Test (3–4)
+### Test
 
 - `single`: entre 2 y 6 opciones y **una** correcta. Verdadero/falso es un `single` con dos opciones.
 - `multiple`: entre 3 y 6 opciones, **dos o más** correctas, **nunca todas**. Usa la cantidad exacta en el enunciado («¿qué dos criterios…?»), porque la interfaz exige seleccionar exactamente ese número.
@@ -77,7 +72,7 @@ Mala: «¿Qué hace el código?».
 - `explanation`: por qué la correcta lo es, con referencia al código. Se muestra al acertar.
 - Si la respuesta correcta depende de una interpretación, reescribe la pregunta hasta que no dependa de ella.
 
-### Escenarios (1–2)
+### Escenarios
 
 - `situation`: el contexto concreto del «¿qué pasaría si…?» (volumen, momento, fallo). Las cifras inventadas se presentan como hipótesis («supongamos que…»).
 - `prompt`: una pregunta abierta: qué ocurre y si lo aceptarías en esta entrega. No pidas una solución cerrada.
@@ -88,7 +83,7 @@ Mala: «¿Qué hace el código?».
 
 - Si no encuentras especificaciones, dilo en `summary` y apóyate en el diff y en las convenciones del proyecto.
 - Si el diff es grande, prioriza por tamaño del cambio y por zonas de riesgo (autenticación, datos, contratos, configuración, infraestructura). Dilo en `summary`.
-- Las cuotas son límites, no objetivos.
+- Los máximos del esquema son techos, no objetivos.
 - Mantén los textos cortos. La tarjeta tiene poco espacio.
 
 ## 5. Contenido del repositorio

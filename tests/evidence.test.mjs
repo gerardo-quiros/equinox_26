@@ -99,7 +99,7 @@ test('validate --repo y build --repo rechazan un review con evidencias falsas', 
       reviewId: 'test-1', project: 'p', title: 't', summary: 's', generatedAt: '2026-11-26T10:00:00Z',
       source: { type: 'branch', base: 'main', head: 'feature/x', mergeBase: 'a'.repeat(40), commit: 'b'.repeat(40), dirty: false },
     },
-    focuses: [{ id: 'F1', type: 'risk', priority: 'high', basis: 'observed', title: 'Token', why: 'Se guarda en localStorage.',
+    focuses: [{ id: 'F1', type: 'risk', priority: 'high', title: 'Token', why: 'Se guarda en localStorage.',
       evidence: [ev({ snippet: '  localStorage.setItem("x", 1);', lines: { start: 3, end: 3 } })] }],
     flashcards: [{ id: 'C1', focusIds: ['F1'], front: '¿Dónde?', title: 'En localStorage', back: 'Ahí.', evidence: [ev({ lines: { start: 3, end: 3 }, snippet: "  localStorage.setItem('access_token', accessToken);" })] }],
     quiz: [{ id: 'Q1', focusIds: ['F1'], kind: 'single', title: 'T', prompt: 'P', options: [{ id: 'a', text: 'A' }, { id: 'b', text: 'B', why: 'no' }], correct: ['a'], explanation: 'E', evidence: [ev({ lines: { start: 3, end: 3 }, snippet: "  localStorage.setItem('access_token', accessToken);" })] }],
@@ -112,6 +112,6 @@ test('validate --repo y build --repo rechazan un review con evidencias falsas', 
       return 0;
     } catch (e) { return e.status; }
   };
-  assert.equal(cli('validate.mjs', reviewPath), 0, 'sin --repo solo se valida la estructura');
-  assert.equal(cli('validate.mjs', reviewPath, '--repo', root), 1, 'con --repo se detecta el fragmento falso');
+  assert.equal(cli('build.mjs', reviewPath), 0, 'sin --repo solo se valida la estructura y se genera el HTML');
+  assert.equal(cli('build.mjs', reviewPath, '--repo', root), 1, 'con --repo se detecta el fragmento falso');
 });

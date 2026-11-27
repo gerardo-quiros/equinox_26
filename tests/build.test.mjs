@@ -2,9 +2,22 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { buildHtml, findExternalReferences } from '../.claude/skills/supervise/scripts/lib/build-html.mjs';
+import { buildHtml } from '../.claude/skills/supervise/scripts/lib/build-html.mjs';
 
 const example = JSON.parse(readFileSync(new URL('../.claude/skills/supervise/examples/review.example.json', import.meta.url), 'utf8'));
+// Lo que haría que la página dependiera de internet (vacío si es autocontenida).
+function findExternalReferences(html) {
+  const withoutData = html.replace(/<script type="application\/json"[^>]*>[\s\S]*?<\/script>/, '');
+  const rules = [
+    [/\s(?:src|href|action|poster)\s*=\s*["']?(?:https?:)?\/\//i, 'atributo src/href con URL externa'],
+    [/url\(\s*["']?(?:https?:)?\/\//i, 'url() externa en el CSS'],
+    [/@import\b/i, '@import'],
+    [/<link\b/i, 'etiqueta <link>'],
+    [/<script\b[^>]*\bsrc\s*=/i, 'script externo'],
+  ];
+  return rules.filter(([pattern]) => pattern.test(withoutData)).map(([, label]) => label);
+}
+
 const dataBlock = (html) => html.match(/<script type="application\/json" id="review-data">([\s\S]*?)<\/script>/)[1];
 
 test('el HTML es autocontenido: sin recursos externos', () => {
@@ -34,17 +47,4 @@ test('un texto malicioso no puede cerrar el script ni inyectar HTML', () => {
   assert.equal(html.includes('</script><script>alert(1)'), false);
   assert.match(html, /<title>&lt;b&gt;Misión&lt;\/b&gt; &amp; &quot;co&quot; · Supervise<\/title>/);
   assert.deepEqual(JSON.parse(dataBlock(html)), evil, 'el JSON se recupera igual');
-});
-
-test('la función de copia del navegador es la misma que se prueba en Node', () => {
-  const html = buildHtml(example);
-  assert.match(html, /function buildScenarioExport\(/);
-  assert.equal(/export function buildScenarioExport/.test(html), false);
-});
-
-test('findExternalReferences detecta dependencias de red', () => {
-  assert.ok(findExternalReferences('<script src="https://cdn.x/y.js"></script>').length);
-  assert.ok(findExternalReferences('<style>a{background:url(https://x/y.png)}</style>').length);
-  assert.ok(findExternalReferences('<link rel="stylesheet" href="a.css">').length);
-  assert.deepEqual(findExternalReferences('<a href="#i-ok">ok</a><script type="application/json" id="d">{"u":"https://x"}</script>'), []);
 });

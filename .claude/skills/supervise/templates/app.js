@@ -1,6 +1,5 @@
 /* Supervise · comportamiento de la página.
-   Lee los datos de #review-data y pinta siempre con textContent (nunca innerHTML).
-   buildScenarioExport() se añade delante al ensamblar (scripts/lib/scenario-export.mjs). */
+   Lee los datos de #review-data y pinta siempre con textContent (nunca innerHTML). */
 (() => {
   'use strict';
 
@@ -8,11 +7,6 @@
 
   // Caracteres mínimos para dar un escenario por respondido (pendiente de decidir).
   const MIN_ANSWER_CHARS = 1;
-
-  const CATEGORY = {
-    method: 'Método', 'default-value': 'Valor por defecto', 'code-detail': 'Detalle de código',
-    behavior: 'Comportamiento', config: 'Configuración', 'data-model': 'Modelo de datos', dependency: 'Dependencia',
-  };
 
   /* ============ 1. Utilidades ============ */
 
@@ -58,11 +52,10 @@
     head.append(el('span', '', ev.file), el('span', '', range));
     box.append(head);
 
-    const highlighted = new Set(ev.highlight || []);
     const numbered = ev.lines && ev.kind !== 'diff'; // en un diff las líneas del fragmento no coinciden con las del archivo
     ev.snippet.replace(/\n+$/, '').split('\n').forEach((text, i) => {
       const n = numbered ? ev.lines.start + i : null;
-      const row = el('div', highlighted.has(n) ? 'ln hl' : 'ln');
+      const row = el('div', 'ln');
       row.append(el('i', '', n === null ? '' : n), el('b', '', text));
       box.append(row);
     });
@@ -189,8 +182,6 @@
     const last = s.index === items.length - 1;
 
     slot(root, 'count').textContent = `Tarjeta ${s.index + 1} de ${items.length}`;
-    const chip = slot(root, 'chip');
-    if (CATEGORY[card.category]) chip.textContent = CATEGORY[card.category]; else chip.hidden = true;
     inline(slot(root, 'front'), card.front);
     slot(root, 'title').textContent = card.title;
     inline(slot(root, 'back'), card.back);
@@ -410,6 +401,61 @@
   }
 
   // El portapapeles de la API moderna puede no estar disponible en file://; se prueba una alternativa.
+  /* ============ Texto de los escenarios para el chat ============ */
+  // Lo que se copia al portapapeles al terminar el nivel: el desarrollador lo pega en el chat para que el agente evalúe sus respuestas.
+
+  const INSTRUCTION =
+    'Evalúa mis respuestas a estos escenarios. Dime qué respuestas son acertadas, ' +
+    'qué consideraciones me faltan y si alguna respuesta mía implica cambiar el código.';
+
+  const normalize = (text) => String(text ?? '').replace(/\r\n?/g, '\n').trim();
+
+  function formatEvidence(ev) {
+    let where = '';
+    if (ev.lines) {
+      where = ev.lines.start === ev.lines.end
+        ? ` (línea ${ev.lines.start})`
+        : ` (líneas ${ev.lines.start}–${ev.lines.end})`;
+    }
+    return `\`${ev.file}\`${where}`;
+  }
+
+  /**
+   * @param {object} review  review.json ya validado
+   * @param {Record<string,string>} answers  respuestas por id de escenario, p. ej. { S1: '...' }
+   * @returns {string} Markdown listo para pegar en el chat
+   */
+  function buildScenarioExport(review, answers = {}) {
+    const { meta, scenarios } = review;
+    const mission = meta.missionName ?? meta.title;
+    const dirty = meta.source.dirty ? ', con cambios sin commitear' : '';
+
+    const lines = [
+      `Revisión «${mission}» · rama \`${meta.source.head}\`, commit \`${meta.source.commit}\`${dirty}.`,
+      '',
+      INSTRUCTION,
+    ];
+
+    scenarios.forEach((sc, i) => {
+      const answer = normalize(answers[sc.id]);
+      lines.push(
+        '',
+        `## Escenario ${i + 1}: ${sc.title}`,
+        '',
+        `**Situación:** ${normalize(sc.situation)}`,
+        '',
+        `**Pregunta:** ${normalize(sc.prompt)}`,
+        '',
+        '**Mi respuesta:**',
+        answer || '(sin respuesta)',
+        '',
+        `**Evidencia:** ${sc.evidence.map(formatEvidence).join(', ')}`,
+      );
+    });
+
+    return lines.join('\n') + '\n';
+  }
+
   async function copyToClipboard(text) {
     // Si el navegador no resuelve ni rechaza la promesa, no se espera indefinidamente.
     const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 1500));

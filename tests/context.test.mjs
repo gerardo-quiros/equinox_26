@@ -48,24 +48,22 @@ function fixtureRepo({ withSpecs = true, dirty = true } = {}) {
 
 const names = (ctx) => ctx.files.map((f) => f.path).sort();
 
-test('modo por defecto: incluye commits y cambios sin commitear, excluye lockfiles y localiza la spec', () => {
+test('incluye commits y cambios sin commitear, excluye lockfiles y lista la spec', () => {
   const root = fixtureRepo();
   const ctx = collectContext({ cwd: root });
 
-  assert.equal(ctx.mode, 'working');
   assert.equal(ctx.head.name, 'feature/001-auth');
   assert.equal(ctx.base.name, 'main');
   assert.equal(ctx.base.source, 'por convención main/master');
   assert.deepEqual(names(ctx), ['src/app.ts', 'src/auth.ts', 'src/new-helper.ts']);
   assert.deepEqual(ctx.excluded, ['package-lock.json']);
-  assert.equal(ctx.dirty.count, 2, 'auth.ts modificado y new-helper.ts sin seguimiento');
+  assert.equal(ctx.dirty, true);
   assert.equal(ctx.commits.length, 1);
   assert.equal(ctx.commits[0].subject, 'feat: login');
   assert.equal(ctx.project, 'acme-portal');
   assert.match(ctx.reviewId, REVIEW_ID);
   assert.ok(ctx.reviewId.includes('-dirty-'), 'el id indica que hay cambios sin commitear');
-  assert.deepEqual(ctx.specs.map((s) => s.path), ['specs/001-auth/spec.md']);
-  assert.equal(ctx.specs[0].title, 'Autenticación de usuarios');
+  assert.deepEqual(ctx.specs, [{ dir: 'specs/001-auth', files: ['spec.md'] }]);
   assert.ok(ctx.patch.includes('diff --git a/src/new-helper.ts b/src/new-helper.ts'), 'el archivo nuevo entra en el parche');
   assert.equal(ctx.patch.includes('package-lock'), false, 'el parche no contiene lockfiles');
   assert.equal(ctx.mergeBase, git(root, 'rev-parse', 'main'));
@@ -80,26 +78,6 @@ test('estadísticas y estado de cada archivo', () => {
   assert.equal(ctx.stats.filesChanged, 3);
   // auth.ts (3 líneas nuevas), app.ts (+1 −1) y new-helper.ts (+1)
   assert.deepEqual(ctx.stats, { filesChanged: 3, additions: 5, deletions: 1 });
-});
-
-test('modo rama: solo commits, sin cambios sin commitear ni archivos nuevos', () => {
-  const root = fixtureRepo();
-  git(root, 'stash', 'push', '-u', '-q');
-  git(root, 'checkout', '-q', 'main');
-  const ctx = collectContext({ cwd: root, branch: 'feature/001-auth' });
-
-  assert.equal(ctx.mode, 'branch');
-  assert.equal(ctx.head.name, 'feature/001-auth');
-  assert.equal(ctx.dirty.count, 0);
-  assert.deepEqual(names(ctx), ['src/app.ts', 'src/auth.ts']);
-  assert.equal(ctx.patch.includes('new-helper'), false);
-  assert.equal(ctx.reviewId.includes('-dirty'), false);
-});
-
-test('rama en la que estás con cambios sin commitear: avisa de que no se incluyen', () => {
-  const root = fixtureRepo();
-  const ctx = collectContext({ cwd: root, branch: 'feature/001-auth' });
-  assert.ok(ctx.warnings.some((w) => w.includes('NO se incluyen')), ctx.warnings.join(' | '));
 });
 
 test('la rama base se puede indicar con --base', () => {
@@ -123,12 +101,6 @@ test('error claro cuando no hay nada que revisar', () => {
   assert.throws(() => collectContext({ cwd: root }), /No hay cambios que revisar frente a «main»/);
 });
 
-test('error claro si la rama indicada no existe o no tiene commits propios', () => {
-  const root = fixtureRepo();
-  assert.throws(() => collectContext({ cwd: root, branch: 'no-existe' }), /No existe la rama «no-existe»/);
-  assert.throws(() => collectContext({ cwd: root, branch: 'main' }), /no tiene commits propios/);
-});
-
 test('sin especificaciones: aviso y se usa el README como contexto', () => {
   const root = fixtureRepo({ withSpecs: false });
   write(root, 'README.md', '# Acme\n\nPortal de clientes.\n');
@@ -138,18 +110,13 @@ test('sin especificaciones: aviso y se usa el README como contexto', () => {
   assert.deepEqual(ctx.conventions.map((c) => c.path), ['README.md']);
 });
 
-test('especificaciones de otras features: aviso con sus nombres', () => {
-  // Spec de otra feature: existe en el proyecto y la rama la tiene, pero no forma parte del diff de la rama.
-  const root = fixtureRepo({ dirty: false });
-  git(root, 'checkout', '-q', 'main');
+test('se listan todas las especificaciones y el agente decide cuáles aplican', () => {
+  const root = fixtureRepo();
   write(root, 'specs/002-billing/spec.md', '# Facturación\n');
-  git(root, 'add', '-A');
-  git(root, 'commit', '-q', '-m', 'spec billing');
-  git(root, 'checkout', '-q', 'feature/001-auth');
-  git(root, 'merge', '-q', '--no-edit', 'main'); // la spec llega a la rama, pero fuera del diff
+  write(root, 'specs/002-billing/plan.md', '# Plan\n');
   const ctx = collectContext({ cwd: root });
-  assert.deepEqual(ctx.specs.map((s) => s.path), ['specs/001-auth/spec.md']);
-  assert.ok(ctx.warnings.some((w) => w.includes('002-billing')), ctx.warnings.join(' | '));
+  assert.deepEqual(ctx.specs.map((s) => s.dir), ['specs/001-auth', 'specs/002-billing']);
+  assert.deepEqual(ctx.specs[1].files, ['spec.md', 'plan.md']);
 });
 
 test('CLAUDE.md se incluye como convenciones del proyecto', () => {
@@ -157,14 +124,6 @@ test('CLAUDE.md se incluye como convenciones del proyecto', () => {
   write(root, 'CLAUDE.md', '# Reglas\n\nNo usar innerHTML.\n');
   const ctx = collectContext({ cwd: root });
   assert.ok(ctx.conventions.some((c) => c.path === 'CLAUDE.md' && c.content.includes('innerHTML')));
-});
-
-test('un archivo nuevo muy grande no se incluye y se avisa', () => {
-  const root = fixtureRepo();
-  write(root, 'data/big.json', 'x'.repeat(1_100_000));
-  const ctx = collectContext({ cwd: root });
-  assert.equal(names(ctx).includes('data/big.json'), false);
-  assert.ok(ctx.warnings.some((w) => w.includes('data/big.json')));
 });
 
 test('context.json no contiene el parche (va en changes.patch) y trae el metadato prellenado', () => {

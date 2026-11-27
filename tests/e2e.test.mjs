@@ -20,6 +20,8 @@ const check = (name, pass, extra) => results.push({ name, pass: !!pass, extra: e
 window.addEventListener('error', (e) => check('sin errores de JavaScript', false, e.message));
 const $ = (s, root = document) => root.querySelector(s);
 const $$ = (s, root = document) => [...root.querySelectorAll(s)];
+// El portapapeles se sustituye para leer lo que la página copia (no depende de permisos del navegador).
+Object.defineProperty(navigator, 'clipboard', { value: { writeText: async (text) => { window.__copied = text; } } });
 const body = $('#level-body');
 const level = (k) => $('.level[data-level="' + k + '"]');
 const slot = (n) => $('[data-slot="' + n + '"]', body);
@@ -42,7 +44,6 @@ const text = (el) => el.textContent.replace(/\s+/g, ' ').trim();
     check('flashcards: se abre el modal', $('#level').open);
     check('flashcards: empieza por la cara delantera', !slot('front-face').hidden && slot('back-face').hidden);
     check('flashcards: pregunta', text(slot('front')).startsWith('¿Dónde guarda el cliente web'));
-    check('flashcards: la primera categoría', text(slot('chip')) === 'Detalle de código');
     for (let i = 0; i < 8; i++) {
       $('[data-focus="flip"]', body).click();
       if (i === 0) {
@@ -121,20 +122,24 @@ const text = (el) => el.textContent.replace(/\s+/g, ' ').trim();
     $('[data-action="next"]', body).click();
     check('escenarios: resumen con un escenario sin responder', $$('.sum li', body).length === 2 && $$('.sum li.empty', body).length === 1);
     check('escenarios: avisa de que falta uno', text(slot('copy-hint')).includes('sin respuesta'));
+    $('[data-action="copy"]', body).click();
+    await wait(300);
+    check('escenarios: un escenario sin responder se marca en el texto', (window.__copied || '').includes('(sin respuesta)'));
     $('[data-action="edit"][data-index="1"]', body).click();
     check('escenarios: editar vuelve al escenario', text(slot('count')) === 'Escenario 2 de 2');
     type(slot('answer'), 'Devolvería name y fullName durante un mes.');
     $('[data-action="next"]', body).click();
     check('escenarios: resumen completo', $$('.sum li.empty', body).length === 0 && text(slot('count')) === '2 de 2 respondidos');
     $('[data-action="copy"]', body).click();
-    await wait(2200);
-    const copied = $('.btn.done', body) !== null;
-    const manual = $('.manual', body);
-    check('escenarios: copia al portapapeles o muestra el texto', copied || (manual && !manual.hidden), copied ? 'portapapeles' : 'alternativa manual');
-    if (manual && !manual.hidden) {
-      check('escenarios: texto manual completo', manual.value.includes('## Escenario 1: Redis se reinicia') && manual.value.includes('Devolvería name y fullName'));
-      check('escenarios: texto sin respuesta del agente', !manual.value.includes('Respuesta del agente'));
-    }
+    await wait(300);
+    const copied = window.__copied || '';
+    check('escenarios: copia el texto al portapapeles', copied.length > 0);
+    check('escenarios: cabecera con misión, rama y commit', copied.startsWith('Revisión «Valle de la Autenticación» · rama \x60feature/auth-sesiones\x60, commit \x60a1b2c3d\x60.'));
+    check('escenarios: incluye la instrucción para el agente', copied.includes('Evalúa mis respuestas'));
+    check('escenarios: un bloque por escenario', copied.includes('## Escenario 1: Redis se reinicia en hora punta') && copied.includes('## Escenario 2: Una app móvil antigua consulta el perfil'));
+    check('escenarios: incluye las respuestas escritas', copied.includes('**Mi respuesta:**\nFallan las peticiones y se pierden las sesiones.\nActivaría persistencia.') && copied.includes('Devolvería name y fullName'));
+    check('escenarios: evidencia con rutas y líneas, sin código', copied.includes('**Evidencia:** \x60api/session/store.py\x60 (líneas 30–33)') && copied.includes('(línea 59)') && !copied.includes('get_session()'));
+    check('escenarios: texto sin respuesta del agente', !copied.includes('Respuesta del agente'));
     $('#level-close').click();
     await closed();
     check('escenarios: nivel conquistado', level('scenarios').dataset.state === 'done');

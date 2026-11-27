@@ -7,13 +7,9 @@ import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { basename, join } from 'node:path';
 
 export const LIMITS = {
-  specBytes: 20_000,
   conventionsBytes: 8_000,
   readmeBytes: 4_000,
-  commits: 30,
-  untrackedBytes: 1_000_000,
   largePatchLines: 3_000,
-  largePatchBytes: 300_000,
 };
 
 // Archivos generados o de dependencias: no aportan criterio humano y ocupan espacio.
@@ -112,28 +108,18 @@ const readCapped = (path, maxBytes) => {
   return { content: buffer.subarray(0, maxBytes).toString('utf8'), truncated };
 };
 
-const titleOf = (text) => (text.match(/^#\s+(.+)$/m)?.[1] ?? '').trim() || null;
-
-// SpecKit: specs/<NNN-nombre>/{spec,plan,tasks}.md. Se asocia a la rama por nombre o por cambio en el diff.
-function findSpecs(root, branch, changedPaths) {
+// SpecKit: specs/<NNN-nombre>/{spec,plan,tasks}.md. No se decide aquí cuál corresponde a la rama:
+// se listan todas y el agente lee las que encajen con el cambio.
+function findSpecs(root) {
   const dir = join(root, 'specs');
-  if (!existsSync(dir)) return { specs: [], unmatched: [] };
-  const names = readdirSync(dir).filter((n) => statSync(join(dir, n)).isDirectory());
-  const lowerBranch = branch.toLowerCase();
-  const matches = (name) => {
-    const bare = name.replace(/^\d+-/, '').toLowerCase();
-    return lowerBranch.includes(name.toLowerCase()) || (bare.length >= 3 && lowerBranch.includes(bare))
-      || changedPaths.some((p) => p.startsWith(`specs/${name}/`));
-  };
-  const picked = names.filter(matches);
-  const specs = picked.flatMap((name) =>
-    ['spec.md', 'plan.md', 'tasks.md'].flatMap((file) => {
-      const path = join(dir, name, file);
-      if (!existsSync(path)) return [];
-      const { content, truncated } = readCapped(path, LIMITS.specBytes);
-      return [{ path: `specs/${name}/${file}`, title: titleOf(content), content, truncated }];
-    }));
-  return { specs, unmatched: names.filter((n) => !picked.includes(n)) };
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir)
+    .filter((name) => statSync(join(dir, name)).isDirectory())
+    .map((name) => ({
+      dir: `specs/${name}`,
+      files: ['spec.md', 'plan.md', 'tasks.md'].filter((file) => existsSync(join(dir, name, file))),
+    }))
+    .filter((spec) => spec.files.length);
 }
 
 function conventionsOf(root, hasSpecs) {
@@ -163,41 +149,24 @@ export const stampOf = (date) => {
 };
 
 /**
- * @param {{cwd?: string, branch?: string|null, base?: string|null, now?: Date}} options
- *   branch: si se indica, se revisan solo los commits de esa rama (sin cambios sin commitear).
+ * Revisa la rama actual frente a su base: commits propios, cambios sin commitear y archivos nuevos sin seguimiento.
+ * @param {{cwd?: string, base?: string|null, now?: Date}} options
  */
-export function collectContext({ cwd = process.cwd(), branch = null, base: explicitBase = null, now = new Date() } = {}) {
+export function collectContext({ cwd = process.cwd(), base: explicitBase = null, now = new Date() } = {}) {
   const root = detectRoot(cwd);
   const warnings = [];
 
-  let headSha;
+  let head;
   try {
-    headSha = git(root, ['rev-parse', 'HEAD']).trim();
+    head = git(root, ['rev-parse', 'HEAD']).trim();
   } catch {
     throw new Error('El repositorio no tiene commits todavía. Haz al menos un commit antes de usar /supervise.');
   }
 
   const currentBranch = tryGit(root, ['symbolic-ref', '--short', '-q', 'HEAD']);
-  const statusLines = git(root, ['status', '--porcelain']).split('\n').filter(Boolean);
+  const dirty = git(root, ['status', '--porcelain']).split('\n').some(Boolean);
   const base = resolveBase(root, explicitBase);
-
-  let mode;
-  let head;
-  let headName;
-  if (branch) {
-    const ref = resolveRef(root, branch);
-    if (!ref) throw new Error(`No existe la rama «${branch}».`);
-    mode = 'branch';
-    head = git(root, ['rev-parse', ref]).trim();
-    headName = branch;
-    if (statusLines.length && currentBranch === branch) {
-      warnings.push(`Hay ${statusLines.length} cambio(s) sin commitear que NO se incluyen: esta revisión cubre solo los commits de «${branch}».`);
-    }
-  } else {
-    mode = 'working';
-    head = headSha;
-    headName = currentBranch ?? `HEAD (detached ${headSha.slice(0, 7)})`;
-  }
+  const headName = currentBranch ?? `HEAD (detached ${head.slice(0, 7)})`;
 
   let mergeBase;
   try {
@@ -206,28 +175,18 @@ export function collectContext({ cwd = process.cwd(), branch = null, base: expli
     throw new Error(`«${headName}» no comparte historia con la base «${base.name}».`);
   }
 
-  if (mode === 'working' && mergeBase === headSha && !statusLines.length) {
-    throw new Error(`No hay cambios que revisar frente a «${base.name}». Cambia de rama o usa /supervise <rama>.`);
+  if (mergeBase === head && !dirty) {
+    throw new Error(`No hay cambios que revisar frente a «${base.name}». Cambia de rama.`);
   }
-  if (mode === 'branch' && mergeBase === head) {
-    throw new Error(`«${branch}» no tiene commits propios frente a «${base.name}».`);
-  }
-  if (mode === 'working' && currentBranch === base.name) {
+  if (currentBranch === base.name) {
     warnings.push(`Estás en la rama base «${base.name}»: solo se revisan los cambios sin commitear.`);
   }
 
-  // Diff: cambios de los archivos con seguimiento (commits y, en modo working, sin commitear) + archivos nuevos sin seguimiento.
-  const rangeArgs = mode === 'working' ? [mergeBase] : [mergeBase, head];
-  const trackedPatch = git(root, ['diff', '--no-color', '--find-renames', ...rangeArgs]);
-  const untracked = mode === 'working' ? untrackedFiles(root) : [];
-  const skippedUntracked = [];
-  const readableUntracked = untracked.filter((file) => {
-    if (statSync(join(root, file)).size > LIMITS.untrackedBytes) { skippedUntracked.push(file); return false; }
-    return true;
-  });
-  if (skippedUntracked.length) warnings.push(`Archivos nuevos demasiado grandes, no incluidos: ${skippedUntracked.join(', ')}`);
+  // Diff contra el merge-base: commits y cambios sin commitear de los archivos con seguimiento, más los archivos nuevos.
+  const trackedPatch = git(root, ['diff', '--no-color', '--find-renames', mergeBase]);
+  const untracked = untrackedFiles(root);
 
-  const sections = splitPatch(trackedPatch + untrackedPatch(root, readableUntracked));
+  const sections = splitPatch(trackedPatch + untrackedPatch(root, untracked));
   const excluded = sections.filter((s) => isExcluded(s.path)).map((s) => s.path);
   const kept = sections.filter((s) => !isExcluded(s.path));
   const patch = kept.map((s) => s.text).join('\n') + (kept.length ? '\n' : '');
@@ -244,38 +203,29 @@ export function collectContext({ cwd = process.cwd(), branch = null, base: expli
   }), { filesChanged: 0, additions: 0, deletions: 0 });
 
   const patchLines = patch.split('\n').length;
-  const largeDiff = patchLines > LIMITS.largePatchLines || Buffer.byteLength(patch) > LIMITS.largePatchBytes;
+  const largeDiff = patchLines > LIMITS.largePatchLines;
   if (largeDiff) warnings.push(`Diff grande (${patchLines} líneas): léelo por archivos, empezando por los de más cambios, y apóyate en las especificaciones.`);
 
-  const dirtyList = mode === 'working' ? statusLines : [];
-  const commits = git(root, ['log', `--max-count=${LIMITS.commits}`, '--format=%h%x09%s', `${mergeBase}..${head}`])
+  const commits = git(root, ['log', '--format=%h%x09%s', `${mergeBase}..${head}`])
     .split('\n').filter(Boolean).map((line) => {
       const [sha, ...subject] = line.split('\t');
       return { sha, subject: subject.join('\t') };
     });
 
-  const { specs, unmatched } = findSpecs(root, headName, files.map((f) => f.path));
-  if (!specs.length) {
-    warnings.push(unmatched.length
-      ? `Hay especificaciones que no se asocian a la rama (${unmatched.join(', ')}). Si corresponden, renombra la rama o indícalo al revisar.`
-      : 'No hay especificaciones: la revisión se basa en el diff y en las convenciones del proyecto.');
-  } else if (unmatched.length) {
-    warnings.push(`Otras especificaciones del proyecto no se asocian a esta rama: ${unmatched.join(', ')}.`);
-  }
+  const specs = findSpecs(root);
+  if (!specs.length) warnings.push('No hay especificaciones: la revisión se basa en el diff y en las convenciones del proyecto.');
 
-  const shortSha = headSha.slice(0, 7);
-  const reviewId = `${slug(headName)}-${shortSha}${dirtyList.length ? '-dirty' : ''}-${stampOf(now)}`;
+  const reviewId = `${slug(headName)}-${head.slice(0, 7)}${dirty ? '-dirty' : ''}-${stampOf(now)}`;
 
   return {
     reviewId,
     generatedAt: now.toISOString(),
     root,
     project: projectName(root),
-    mode,
     head: { name: headName, sha: head },
     base,
     mergeBase,
-    dirty: { count: dirtyList.length, entries: dirtyList.slice(0, 50) },
+    dirty,
     lastCommitSubject: tryGit(root, ['log', '-1', '--format=%s']),
     commits,
     stats,
@@ -307,7 +257,7 @@ export function contextSummary(ctx) {
         head: ctx.head.name,
         mergeBase: ctx.mergeBase,
         commit: ctx.head.sha,
-        dirty: ctx.dirty.count > 0,
+        dirty: ctx.dirty,
       },
       stats: ctx.stats,
     },

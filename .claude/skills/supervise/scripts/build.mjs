@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 // Uso: node build.mjs <review.json> [--repo <raíz del repositorio>] [--out <review.html>]
 // Valida review.json (con --repo, también que las evidencias coinciden con el archivo) y genera un único review.html.
-// Código de salida: 0 correcto · 1 review.json no válido o el HTML no es autocontenido · 2 uso o lectura incorrectos.
+// Código de salida: 0 correcto · 1 review.json no válido · 2 uso o lectura incorrectos.
 
 import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { validateReview } from './lib/validate-review.mjs';
-import { buildHtml, findExternalReferences } from './lib/build-html.mjs';
+import { buildHtml } from './lib/build-html.mjs';
 import { verifyEvidence } from './lib/evidence.mjs';
 
 function usage(message) {
@@ -50,12 +50,6 @@ if (!valid) {
 }
 
 const html = buildHtml(review);
-const external = findExternalReferences(html);
-if (external.length) {
-  console.error(`✗ El HTML no es autocontenido (${external.join(', ')}). No se ha escrito.`);
-  process.exit(1);
-}
-
 const target = resolve(output ?? join(dirname(input), 'review.html'));
 writeFileSync(target, html);
 console.log(`✓ ${target} · ${(Buffer.byteLength(html) / 1024).toFixed(0)} KB · ${warnings.length} aviso(s)`);

@@ -9,12 +9,6 @@
   "properties": {
     "schemaVersion": { "const": "1.0" },
     "meta": { "$ref": "#/$defs/meta" },
-    "requirements": {
-      "description": "Requisitos de la especificación a los que se refieren los focos. Opcional si el proyecto no tiene specs.",
-      "type": "array",
-      "maxItems": 30,
-      "items": { "$ref": "#/$defs/requirement" }
-    },
     "focuses": {
       "description": "Puntos que merecen criterio humano. Toda pregunta se deriva de al menos uno.",
       "type": "array",
@@ -23,21 +17,21 @@
       "items": { "$ref": "#/$defs/focus" }
     },
     "flashcards": {
-      "description": "Nivel 01. Recomendado: 6–10.",
+      "description": "Nivel 01.",
       "type": "array",
       "minItems": 1,
       "maxItems": 10,
       "items": { "$ref": "#/$defs/flashcard" }
     },
     "quiz": {
-      "description": "Nivel 02. Recomendado: 3–4.",
+      "description": "Nivel 02.",
       "type": "array",
       "minItems": 1,
       "maxItems": 4,
       "items": { "$ref": "#/$defs/quizItem" }
     },
     "scenarios": {
-      "description": "Nivel 03. Recomendado: 1–2.",
+      "description": "Nivel 03.",
       "type": "array",
       "minItems": 1,
       "maxItems": 2,
@@ -84,15 +78,6 @@
         },
         "summary": { "$ref": "#/$defs/text" },
         "generatedAt": { "type": "string", "format": "date-time" },
-        "generator": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["agent"],
-          "properties": {
-            "agent": { "$ref": "#/$defs/label" },
-            "model": { "$ref": "#/$defs/label" }
-          }
-        },
         "source": {
           "type": "object",
           "additionalProperties": false,
@@ -118,38 +103,7 @@
             "additions": { "type": "integer", "minimum": 0 },
             "deletions": { "type": "integer", "minimum": 0 }
           }
-        },
-        "specs": {
-          "description": "Especificaciones consultadas durante el análisis.",
-          "type": "array",
-          "maxItems": 10,
-          "items": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": ["path"],
-            "properties": {
-              "path": { "$ref": "#/$defs/relativePath" },
-              "title": { "$ref": "#/$defs/label" }
-            }
-          }
         }
-      }
-    },
-
-    "requirement": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["id", "source", "text"],
-      "properties": {
-        "id": { "type": "string", "pattern": "^R[0-9]+$" },
-        "source": { "$ref": "#/$defs/relativePath" },
-        "ref": {
-          "description": "Identificador del requisito en su documento, p. ej. «AC-4».",
-          "type": "string",
-          "pattern": "\\S",
-          "maxLength": 40
-        },
-        "text": { "$ref": "#/$defs/text" }
       }
     },
 
@@ -171,19 +125,6 @@
             "end": { "type": "integer", "minimum": 1 }
           }
         },
-        "highlight": {
-          "description": "Números de línea absolutos a resaltar. Requiere lines y deben estar dentro del rango.",
-          "type": "array",
-          "minItems": 1,
-          "maxItems": 20,
-          "uniqueItems": true,
-          "items": { "type": "integer", "minimum": 1 }
-        },
-        "language": {
-          "description": "Lenguaje para el resaltado: ts, py, md, diff, json…",
-          "type": "string",
-          "pattern": "^[a-z0-9+#-]{1,20}$"
-        },
         "snippet": {
           "description": "Máximo 60 líneas (se comprueba en la validación semántica).",
           "type": "string",
@@ -203,7 +144,7 @@
     "focus": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "type", "priority", "basis", "title", "why", "evidence"],
+      "required": ["id", "type", "priority", "title", "why", "evidence"],
       "properties": {
         "id": { "type": "string", "pattern": "^F[0-9]+$" },
         "type": {
@@ -214,21 +155,10 @@
           "description": "Orientativa; no es una garantía.",
           "enum": ["high", "medium", "low"]
         },
-        "basis": {
-          "description": "observed: se ve directamente en el código o el diff · inferred: deducción que el humano debe confirmar.",
-          "enum": ["observed", "inferred"]
-        },
         "title": { "$ref": "#/$defs/label" },
         "why": {
           "description": "Por qué conviene que lo mire un humano.",
           "$ref": "#/$defs/text"
-        },
-        "requirementIds": {
-          "type": "array",
-          "minItems": 1,
-          "maxItems": 5,
-          "uniqueItems": true,
-          "items": { "type": "string", "pattern": "^R[0-9]+$" }
         },
         "evidence": { "$ref": "#/$defs/evidenceList" }
       }
@@ -241,9 +171,6 @@
       "properties": {
         "id": { "type": "string", "pattern": "^C[0-9]+$" },
         "focusIds": { "$ref": "#/$defs/focusRefs" },
-        "category": {
-          "enum": ["method", "default-value", "code-detail", "behavior", "config", "data-model", "dependency"]
-        },
         "front": { "$ref": "#/$defs/shortText" },
         "title": {
           "description": "Titular de la respuesta, en texto plano y sin formato (se ve en la cara trasera).",

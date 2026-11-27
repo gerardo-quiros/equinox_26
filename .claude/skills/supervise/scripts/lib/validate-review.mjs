@@ -4,12 +4,6 @@
 
 import { validateAgainstSchema } from './schema-subset.mjs';
 
-export const RECOMMENDED = {
-  flashcards: { min: 6, max: 10 },
-  quiz: { min: 3, max: 4 },
-  scenarios: { min: 1, max: 2 },
-};
-
 const MAX_SNIPPET_LINES = 60;
 const QUESTION_GROUPS = ['flashcards', 'quiz', 'scenarios'];
 
@@ -27,7 +21,7 @@ export function validateReview(review, schema) {
 
   // 1. Identificadores únicos en todo el documento.
   const seen = new Map();
-  const groups = ['requirements', 'focuses', ...QUESTION_GROUPS];
+  const groups = ['focuses', ...QUESTION_GROUPS];
   for (const group of groups) {
     (review[group] ?? []).forEach((item, i) => {
       const path = `${group}[${i}].id`;
@@ -36,15 +30,8 @@ export function validateReview(review, schema) {
     });
   }
 
-  // 2. Referencias a requisitos y focos.
-  const requirementIds = new Set((review.requirements ?? []).map((r) => r.id));
+  // 2. Referencias a focos.
   const focusIds = new Set(review.focuses.map((f) => f.id));
-
-  review.focuses.forEach((focus, i) => {
-    (focus.requirementIds ?? []).forEach((id, j) => {
-      if (!requirementIds.has(id)) err(`focuses[${i}].requirementIds[${j}]`, `el requisito "${id}" no existe en requirements`);
-    });
-  });
 
   const referenced = new Set();
   for (const group of QUESTION_GROUPS) {
@@ -67,13 +54,7 @@ export function validateReview(review, schema) {
     });
   }
 
-  // 5. Avisos de calidad (no bloquean).
-  for (const group of QUESTION_GROUPS) {
-    const { min } = RECOMMENDED[group];
-    if (review[group].length < min) {
-      warn(group, `hay ${review[group].length}; se recomiendan al menos ${min}. Correcto solo si el cambio es pequeño.`);
-    }
-  }
+  // 5. Aviso de calidad (no bloquea).
   review.focuses.forEach((focus, i) => {
     if (!referenced.has(focus.id)) {
       const level = focus.priority === 'high' ? 'de prioridad alta ' : '';
@@ -116,16 +97,5 @@ function checkEvidence(ev, path, err) {
   }
   if (ev.lines && ev.lines.end < ev.lines.start) {
     err(`${path}.lines`, `end (${ev.lines.end}) no puede ser menor que start (${ev.lines.start})`);
-  }
-  if (ev.highlight) {
-    if (!ev.lines) {
-      err(`${path}.highlight`, 'highlight requiere lines');
-    } else {
-      ev.highlight.forEach((n, k) => {
-        if (n < ev.lines.start || n > ev.lines.end) {
-          err(`${path}.highlight[${k}]`, `la línea ${n} está fuera del rango ${ev.lines.start}–${ev.lines.end}`);
-        }
-      });
-    }
   }
 }

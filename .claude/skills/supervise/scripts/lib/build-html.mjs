@@ -29,9 +29,6 @@ const safeJson = (value) => JSON.stringify(value).replace(/</g, '\\u003c').repla
 export function buildHtml(review) {
   const mission = review.meta.missionName ?? review.meta.title;
 
-  // La función que genera el texto copiado es la misma que se prueba en Node: se incrusta sin «export».
-  const exportFunction = read('scripts/lib/scenario-export.mjs').replace(/^export /gm, '');
-  const script = `${exportFunction}\n${read('templates/app.js')}`;
   const templates = ['flashcards', 'quiz', 'scenarios'].map((name) => read(`templates/${name}.html`)).join('\n');
 
   let html = read('templates/page.html');
@@ -39,19 +36,6 @@ export function buildHtml(review) {
   html = replaceAll(html, '<!--@styles-->', inlineAssets(read('templates/styles.css')));
   html = replaceAll(html, '<!--@templates-->', templates);
   html = replaceAll(html, '<!--@data-->', safeJson(review));
-  html = replaceAll(html, '<!--@script-->', script);
+  html = replaceAll(html, '<!--@script-->', read('templates/app.js'));
   return inlineAssets(html);
-}
-
-/** Devuelve lo que haría que la página dependiera de internet (vacío si es autocontenida). */
-export function findExternalReferences(html) {
-  const withoutData = html.replace(/<script type="application\/json"[^>]*>[\s\S]*?<\/script>/, '');
-  const rules = [
-    [/\s(?:src|href|action|poster)\s*=\s*["']?(?:https?:)?\/\//i, 'atributo src/href con URL externa'],
-    [/url\(\s*["']?(?:https?:)?\/\//i, 'url() externa en el CSS'],
-    [/@import\b/i, '@import'],
-    [/<link\b/i, 'etiqueta <link>'],
-    [/<script\b[^>]*\bsrc\s*=/i, 'script externo'],
-  ];
-  return rules.filter(([pattern]) => pattern.test(withoutData)).map(([, label]) => label);
 }
