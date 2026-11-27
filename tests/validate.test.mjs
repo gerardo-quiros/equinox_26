@@ -184,6 +184,74 @@ test('una palabra clave de JSON Schema no soportada lanza en vez de ignorarse', 
   assert.throws(() => validateAgainstSchema({}, { type: 'object', oneOf: [] }), /no soportada: "oneOf"/);
 });
 
+// ---- Fase de estudio ----
+
+test('una revisión 1.0 sin study sigue siendo válida', () => {
+  const r = clone();
+  r.schemaVersion = '1.0';
+  delete r.study;
+  delete r.meta.source.repoUrl;
+  delete r.meta.source.published;
+  assert.deepEqual(validateReview(r, reviewSchema).errors, []);
+});
+
+test('study exige schemaVersion 1.1', () => {
+  expectError((r) => { r.schemaVersion = '1.0'; }, 'schemaVersion', '1.1');
+});
+
+test('study: el flujo necesita al menos dos pasos', () => {
+  expectError((r) => { r.study.map.flow = r.study.map.flow.slice(0, 1); }, 'study.map.flow', 'mínimo 2');
+});
+
+test('study: grupos opcionales vacíos son válidos', () => {
+  const r = clone();
+  r.study.map.models = [];
+  r.study.map.tests = [];
+  r.study.map.edgeCases = [];
+  assert.deepEqual(validateReview(r, reviewSchema).errors, []);
+});
+
+test('study: aviso si no hay decisiones ni casos límite', () => {
+  const r = clone();
+  r.study.map.decisions = [];
+  r.study.map.edgeCases = [];
+  const result = validateReview(r, reviewSchema);
+  assert.equal(result.valid, true);
+  assert.ok(result.warnings.some((w) => w.path === 'study.map'));
+});
+
+test('study: componente repetido', () => {
+  expectError((r) => { r.study.map.components[1].name = r.study.map.components[0].name; }, 'study.map.components[1].name', 'repetido');
+});
+
+test('study: referencia a un foco inexistente', () => {
+  expectError((r) => { r.study.teachings[0].focusIds = ['F42']; }, 'study.teachings[0].focusIds[0]', 'F42');
+});
+
+test('study: los componentes no admiten snippet', () => {
+  expectError((r) => { r.study.map.components[0].ref.snippet = 'x'; }, 'study.map.components[0].ref.snippet', 'no permitido');
+});
+
+test('study: snippet de más de 12 líneas', () => {
+  expectError((r) => {
+    r.study.teachings[1].ref = { file: 'a.py', lines: { start: 1, end: 13 }, snippet: 'x\n'.repeat(13) };
+  }, 'study.teachings[1].ref.snippet', '12 líneas');
+});
+
+test('study: ruta insegura en una referencia', () => {
+  expectError((r) => { r.study.map.flow[1].ref.file = '../etc/passwd'; }, 'study.map.flow[1].ref.file');
+});
+
+test('study: no se admiten URLs escritas por el agente', () => {
+  expectError((r) => { r.study.teachings[0].url = 'https://github.com/x'; }, 'study.teachings[0].url', 'no permitido');
+});
+
+test('meta.source.repoUrl solo acepta la URL web de GitHub', () => {
+  for (const bad of ['git@github.com:acme/x.git', 'https://gitlab.com/acme/x', 'https://github.com/acme/x/blob/main', 'javascript:alert(1)']) {
+    expectError((r) => { r.meta.source.repoUrl = bad; }, 'meta.source.repoUrl');
+  }
+});
+
 // ---- Exportación de escenarios al portapapeles ----
 
 test('el escenario ya no exige respuesta de referencia', () => {

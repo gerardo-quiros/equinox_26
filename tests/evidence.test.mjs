@@ -89,6 +89,41 @@ test('ignora espacios finales al comparar', () => {
   assert.deepEqual(verifyEvidence(review(ev()), root), []);
 });
 
+// ---- Referencias del bloque study ----
+
+const studyReview = (ref) => ({
+  focuses: [], flashcards: [], quiz: [], scenarios: [],
+  study: {
+    chronicle: { title: 't', text: 't' },
+    map: { flow: [{ label: 'a', detail: 'b', ref }, { label: 'c', detail: 'd' }], components: [], models: [], decisions: [], edgeCases: [], tests: [] },
+    teachings: [],
+  },
+});
+
+test('study: una referencia sin snippet solo comprueba archivo y rango', () => {
+  const root = repoWith({ [FILE]: CONTENT });
+  assert.deepEqual(verifyEvidence(studyReview({ file: FILE, lines: { start: 1, end: 5 } }), root), []);
+  const [missing] = verifyEvidence(studyReview({ file: 'src/fantasma.ts' }), root);
+  assert.equal(missing.path, 'study.map.flow[0].ref.file');
+  assert.match(missing.message, /no existe/);
+  const [range] = verifyEvidence(studyReview({ file: FILE, lines: { start: 3, end: 40 } }), root);
+  assert.equal(range.path, 'study.map.flow[0].ref.lines');
+});
+
+test('study: un snippet se verifica igual que una evidencia', () => {
+  const root = repoWith({ [FILE]: CONTENT });
+  const good = studyReview({ file: FILE, lines: { start: 3, end: 3 }, snippet: "  localStorage.setItem('access_token', accessToken);" });
+  assert.deepEqual(verifyEvidence(good, root), []);
+  const bad = studyReview({ file: FILE, lines: { start: 3, end: 3 }, snippet: '  inventado();' });
+  const [error] = verifyEvidence(bad, root);
+  assert.equal(error.path, 'study.map.flow[0].ref.snippet');
+});
+
+test('study: una referencia que sale del repositorio se rechaza', () => {
+  const [error] = verifyEvidence(studyReview({ file: '../../etc/passwd' }), repoWith({ [FILE]: CONTENT }));
+  assert.match(error.message, /sale del repositorio/);
+});
+
 test('validate --repo y build --repo rechazan un review con evidencias falsas', () => {
   const root = repoWith({ [FILE]: CONTENT });
   const reviewPath = join(root, 'review.json');

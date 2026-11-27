@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import { extname } from 'node:path';
 
 const SKILL = new URL('../../', import.meta.url);
-const MIME = { '.jpg': 'image/jpeg', '.png': 'image/png', '.woff2': 'font/woff2' };
+const MIME = { '.jpg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp', '.woff2': 'font/woff2' };
 
 const read = (relative) => readFileSync(new URL(relative, SKILL), 'utf8');
 
@@ -31,11 +31,15 @@ export function buildHtml(review) {
 
   const templates = ['flashcards', 'quiz', 'scenarios'].map((name) => read(`templates/${name}.html`)).join('\n');
 
+  // Orden importante: los datos van al final para que ningún texto del JSON se confunda con un marcador.
   let html = read('templates/page.html');
   html = replaceAll(html, '<!--@title-->', escapeHtml(`${mission} · Supervise`));
-  html = replaceAll(html, '<!--@styles-->', inlineAssets(read('templates/styles.css')));
+  html = replaceAll(html, '<!--@styles-->', read('templates/styles.css'));
+  html = replaceAll(html, '<!--@study-styles-->', read('templates/study.css'));
+  html = replaceAll(html, '<!--@study-->', read('templates/study.html'));
   html = replaceAll(html, '<!--@templates-->', templates);
-  html = replaceAll(html, '<!--@data-->', safeJson(review));
   html = replaceAll(html, '<!--@script-->', read('templates/app.js'));
-  return inlineAssets(html);
+  html = replaceAll(html, '<!--@study-script-->', read('templates/study.js'));
+  html = inlineAssets(html);
+  return replaceAll(html, '<!--@data-->', safeJson(review));
 }

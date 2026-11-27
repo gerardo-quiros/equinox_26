@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "1.0",
+  "schemaVersion": "1.1",
   "meta": {
     "reviewId": "feature-auth-sesiones-a1b2c3d-20261126T1000",
     "project": "acme-portal",
@@ -13,13 +13,199 @@
       "head": "feature/auth-sesiones",
       "mergeBase": "9f2c4e1",
       "commit": "a1b2c3d",
-      "dirty": false
+      "dirty": false,
+      "repoUrl": "https://github.com/acme/acme-portal",
+      "published": true
     },
     "stats": {
       "filesChanged": 14,
       "additions": 612,
       "deletions": 48
     }
+  },
+  "study": {
+    "chronicle": {
+      "title": "Valle de la Autenticación",
+      "text": "La rama añade inicio y cierre de sesión con tokens JWT. Las sesiones se guardan en Redis con una caducidad de 30 minutos, los intentos fallidos se limitan por IP y correo, y `GET /users/{id}` pasa a devolver `fullName` en lugar de `name`."
+    },
+    "map": {
+      "flow": [
+        {
+          "label": "POST /login",
+          "detail": "El cliente envía correo y contraseña."
+        },
+        {
+          "label": "register_failure()",
+          "detail": "Si las credenciales fallan, cuenta el intento y bloquea a partir del sexto en 60 s.",
+          "ref": {
+            "file": "api/auth/rate_limit.py",
+            "lines": { "start": 9, "end": 14 }
+          }
+        },
+        {
+          "label": "Sesión en Redis",
+          "detail": "Se guarda la sesión con clave `session:{user_id}:{id}` y TTL de 1800 s.",
+          "ref": {
+            "file": "api/session/config.py",
+            "lines": { "start": 16, "end": 21 }
+          }
+        },
+        {
+          "label": "Respuesta con tokens",
+          "detail": "Devuelve `accessToken`, `refreshToken` y `expiresIn`."
+        },
+        {
+          "label": "saveSession()",
+          "detail": "El cliente web guarda ambos tokens y programa la renovación.",
+          "ref": {
+            "file": "web/src/auth/token.ts",
+            "lines": { "start": 38, "end": 46 }
+          }
+        }
+      ],
+      "components": [
+        {
+          "name": "rate_limit.py",
+          "role": "Seguridad",
+          "detail": "Cuenta los intentos fallidos por IP y correo, en memoria del proceso.",
+          "ref": {
+            "file": "api/auth/rate_limit.py"
+          }
+        },
+        {
+          "name": "session/store.py",
+          "role": "Persistencia",
+          "detail": "Lee, crea y borra sesiones en Redis. `logout_all()` cierra todas las de un usuario.",
+          "ref": {
+            "file": "api/session/store.py"
+          }
+        },
+        {
+          "name": "session/config.py",
+          "role": "Configuración",
+          "detail": "Backend `redis`, TTL de 30 minutos y sin alternativa si Redis cae.",
+          "ref": {
+            "file": "api/session/config.py"
+          }
+        },
+        {
+          "name": "token.ts",
+          "role": "Cliente web",
+          "detail": "Guarda los tokens en `localStorage` y renueva el de acceso 60 s antes de caducar.",
+          "ref": {
+            "file": "web/src/auth/token.ts"
+          }
+        }
+      ],
+      "models": [
+        {
+          "name": "LoginResponse",
+          "role": "Salida API",
+          "detail": "Lo que devuelve el login y consume `saveSession()`.",
+          "fields": ["accessToken", "refreshToken", "expiresIn"]
+        },
+        {
+          "name": "Session",
+          "role": "Modelo interno",
+          "detail": "Sesión guardada en Redis; `Session.parse()` la reconstruye.",
+          "ref": {
+            "file": "api/session/store.py",
+            "lines": { "start": 30, "end": 33 }
+          }
+        },
+        {
+          "name": "UserOut",
+          "role": "Salida API",
+          "detail": "Respuesta de `GET /users/{id}`. Ahora expone `fullName`.",
+          "fields": ["id", "fullName"]
+        }
+      ],
+      "decisions": [
+        {
+          "title": "Redis como almacén de sesiones",
+          "detail": "El plan pedía tokens sin estado; se eligió Redis para poder cerrar sesión en todos los dispositivos.",
+          "focusIds": ["F3"],
+          "ref": {
+            "file": "api/session/config.py",
+            "lines": { "start": 16, "end": 17 },
+            "snippet": "SESSION_BACKEND = \"redis\"\nSESSION_REDIS_URL = env(\"REDIS_URL\")"
+          }
+        },
+        {
+          "title": "Tokens en localStorage",
+          "detail": "Evita pedir login al recargar, a cambio de exponerlos a cualquier script de la página.",
+          "focusIds": ["F1"]
+        },
+        {
+          "title": "Renombrar name a fullName",
+          "detail": "Se cambió el contrato sin periodo de compatibilidad.",
+          "focusIds": ["F4"]
+        }
+      ],
+      "edgeCases": [
+        {
+          "title": "Redis no responde",
+          "detail": "`get_session()` no captura el error: la petición acaba en 500.",
+          "focusIds": ["F3"],
+          "ref": {
+            "file": "api/session/store.py",
+            "lines": { "start": 32, "end": 32 },
+            "snippet": "    raw = redis_client.get(key)  # sin try/except ni fallback"
+          }
+        },
+        {
+          "title": "Varios workers",
+          "detail": "Cada proceso cuenta sus intentos: el límite real se multiplica por 4.",
+          "focusIds": ["F6"]
+        },
+        {
+          "title": "Sesión inactiva 30 minutos",
+          "detail": "Redis borra la clave por TTL; el cliente recibe 401 y debe volver a entrar."
+        }
+      ],
+      "tests": [
+        {
+          "name": "test_session.py",
+          "detail": "Login correcto devuelve tokens. La caducidad solo está como TODO.",
+          "cases": 1,
+          "ref": {
+            "file": "api/tests/auth/test_session.py",
+            "lines": { "start": 20, "end": 25 }
+          }
+        },
+        {
+          "name": "test_rate_limit.py",
+          "detail": "El sexto intento fallido en un minuto responde 429.",
+          "cases": 1,
+          "ref": {
+            "file": "api/tests/auth/test_rate_limit.py",
+            "lines": { "start": 8, "end": 12 }
+          }
+        }
+      ]
+    },
+    "teachings": [
+      {
+        "title": "Una sesión vive donde vive Redis",
+        "text": "Si Redis cae o se reinicia sin persistencia, todas las sesiones desaparecen y las peticiones fallan con 500. Ante un pico de errores tras un reinicio, mira primero Redis.",
+        "focusIds": ["F3"]
+      },
+      {
+        "title": "El límite de intentos es por proceso",
+        "text": "`_attempts` vive en la memoria de cada worker. Con 4 workers, un atacante puede hacer hasta 20 intentos por minuto, y un reinicio pone los contadores a cero.",
+        "focusIds": ["F6"],
+        "ref": {
+          "file": "api/auth/rate_limit.py",
+          "lines": { "start": 4, "end": 6 },
+          "snippet": "MAX_ATTEMPTS = 5\nWINDOW_SECONDS = 60\n_attempts: dict[str, list[float]] = defaultdict(list)"
+        }
+      },
+      {
+        "title": "Cambiar un campo rompe a quien lo lee",
+        "text": "`name` pasó a `fullName`. Cualquier cliente que no se actualice a la vez dejará de mostrar el nombre del usuario.",
+        "focusIds": ["F4"]
+      }
+    ]
   },
   "focuses": [
     {

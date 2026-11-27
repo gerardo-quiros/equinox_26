@@ -33,6 +33,26 @@ test('incrusta fuentes e imágenes y pesa menos de 1 MB', () => {
   assert.ok(Buffer.byteLength(html) < 1024 * 1024, `pesa ${Buffer.byteLength(html)} bytes`);
 });
 
+test('incluye las vistas de estudio con imágenes WebP y abre en el inicio', () => {
+  const html = buildHtml(example);
+  assert.match(html, /data:image\/webp;base64,/);
+  assert.match(html, /id="eq-landing"/);
+  assert.match(html, /<main class="stage" id="stage" hidden>/, 'el mapa de misiones empieza oculto');
+  assert.equal(/<!--@[\w-]+-->/.test(html.replace(/<script type="application\/json"[\s\S]*?<\/script>/, '')), false, 'ningún marcador sin sustituir');
+});
+
+test('un marcador dentro de los datos no se sustituye', () => {
+  const tricky = structuredClone(example);
+  tricky.study.chronicle.text = 'Texto con <!--@study-script--> dentro';
+  assert.equal(JSON.parse(dataBlock(buildHtml(tricky))).study.chronicle.text, 'Texto con <!--@study-script--> dentro');
+});
+
+test('las plantillas de estudio no usan innerHTML', () => {
+  const js = readFileSync(new URL('../.claude/skills/supervise/templates/study.js', import.meta.url), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, ''); // sin comentarios
+  assert.equal(/innerHTML|outerHTML|insertAdjacentHTML|document\.write/.test(js), false);
+});
+
 test('los datos viajan íntegros en el bloque JSON', () => {
   assert.deepEqual(JSON.parse(dataBlock(buildHtml(example))), example);
 });

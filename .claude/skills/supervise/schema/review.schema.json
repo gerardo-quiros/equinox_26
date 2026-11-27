@@ -7,8 +7,15 @@
   "additionalProperties": false,
   "required": ["schemaVersion", "meta", "focuses", "flashcards", "quiz", "scenarios"],
   "properties": {
-    "schemaVersion": { "const": "1.0" },
+    "schemaVersion": {
+      "description": "1.1 añade el bloque opcional study. Las revisiones 1.0 siguen siendo válidas.",
+      "enum": ["1.0", "1.1"]
+    },
     "meta": { "$ref": "#/$defs/meta" },
+    "study": {
+      "description": "Fase de estudio («El camino del Aprendiz»): explica cómo funciona el cambio antes de evaluarlo. Opcional.",
+      "$ref": "#/$defs/study"
+    },
     "focuses": {
       "description": "Puntos que merecen criterio humano. Toda pregunta se deriva de al menos uno.",
       "type": "array",
@@ -90,6 +97,15 @@
             "commit": { "$ref": "#/$defs/sha" },
             "dirty": {
               "description": "true si la revisión incluye cambios sin commitear.",
+              "type": "boolean"
+            },
+            "repoUrl": {
+              "description": "URL web del repositorio en GitHub (https://github.com/org/repo). La calcula context.mjs; no la escribas a mano.",
+              "type": "string",
+              "pattern": "^https://github\\.com/[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$"
+            },
+            "published": {
+              "description": "true si el commit ya está en alguna rama remota (los enlaces a GitHub funcionarán). Lo calcula context.mjs.",
               "type": "boolean"
             }
           }
@@ -249,6 +265,176 @@
         },
         "prompt": { "$ref": "#/$defs/shortText" },
         "evidence": { "$ref": "#/$defs/evidenceList" }
+      }
+    },
+
+    "codeRef": {
+      "description": "Dónde está algo en el repositorio. Sin snippet: se comprueba que el archivo existe y que las líneas caben.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["file"],
+      "properties": {
+        "file": { "$ref": "#/$defs/relativePath" },
+        "lines": { "$ref": "#/$defs/lineRange" }
+      }
+    },
+    "codeRefWithSnippet": {
+      "description": "Como codeRef, con un fragmento de código opcional (máximo 12 líneas). Si hay snippet, debe coincidir con el archivo.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["file"],
+      "properties": {
+        "file": { "$ref": "#/$defs/relativePath" },
+        "lines": { "$ref": "#/$defs/lineRange" },
+        "snippet": { "type": "string", "pattern": "\\S", "maxLength": 1200 }
+      }
+    },
+    "lineRange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start", "end"],
+      "properties": {
+        "start": { "type": "integer", "minimum": 1 },
+        "end": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "optionalFocusRefs": {
+      "type": "array",
+      "minItems": 0,
+      "maxItems": 3,
+      "uniqueItems": true,
+      "items": { "type": "string", "pattern": "^F[0-9]+$" }
+    },
+
+    "study": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["chronicle", "map", "teachings"],
+      "properties": {
+        "chronicle": { "$ref": "#/$defs/chronicle" },
+        "map": { "$ref": "#/$defs/knowledgeMap" },
+        "teachings": {
+          "description": "Píldoras del maestro: lo que alguien debería recordar de este cambio.",
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 6,
+          "items": { "$ref": "#/$defs/teaching" }
+        }
+      }
+    },
+    "chronicle": {
+      "description": "La crónica: qué se hizo y para qué, en un párrafo corto.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title", "text"],
+      "properties": {
+        "title": { "$ref": "#/$defs/label" },
+        "text": { "$ref": "#/$defs/text" }
+      }
+    },
+    "knowledgeMap": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["flow", "components", "models", "decisions", "edgeCases", "tests"],
+      "properties": {
+        "flow": {
+          "description": "Recorrido de la ejecución, de la entrada a la salida.",
+          "type": "array", "minItems": 2, "maxItems": 8,
+          "items": { "$ref": "#/$defs/flowStep" }
+        },
+        "components": {
+          "type": "array", "minItems": 1, "maxItems": 8,
+          "items": { "$ref": "#/$defs/component" }
+        },
+        "models": {
+          "type": "array", "minItems": 0, "maxItems": 8,
+          "items": { "$ref": "#/$defs/dataModel" }
+        },
+        "decisions": {
+          "type": "array", "minItems": 0, "maxItems": 6,
+          "items": { "$ref": "#/$defs/studyNote" }
+        },
+        "edgeCases": {
+          "type": "array", "minItems": 0, "maxItems": 6,
+          "items": { "$ref": "#/$defs/studyNote" }
+        },
+        "tests": {
+          "type": "array", "minItems": 0, "maxItems": 8,
+          "items": { "$ref": "#/$defs/testItem" }
+        }
+      }
+    },
+    "flowStep": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["label", "detail"],
+      "properties": {
+        "label": { "type": "string", "pattern": "\\S", "maxLength": 60 },
+        "detail": { "type": "string", "pattern": "\\S", "maxLength": 160 },
+        "ref": { "$ref": "#/$defs/codeRef" }
+      }
+    },
+    "component": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "role", "detail"],
+      "properties": {
+        "name": { "type": "string", "pattern": "\\S", "maxLength": 80 },
+        "role": { "type": "string", "pattern": "\\S", "maxLength": 40 },
+        "detail": { "$ref": "#/$defs/shortText" },
+        "ref": { "$ref": "#/$defs/codeRef" }
+      }
+    },
+    "dataModel": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "role", "detail"],
+      "properties": {
+        "name": { "type": "string", "pattern": "\\S", "maxLength": 80 },
+        "role": { "type": "string", "pattern": "\\S", "maxLength": 40 },
+        "detail": { "$ref": "#/$defs/shortText" },
+        "fields": {
+          "type": "array", "minItems": 0, "maxItems": 8,
+          "items": { "type": "string", "pattern": "\\S", "maxLength": 60 }
+        },
+        "ref": { "$ref": "#/$defs/codeRef" }
+      }
+    },
+    "studyNote": {
+      "description": "Decisión o caso límite: título y una frase.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title", "detail"],
+      "properties": {
+        "title": { "$ref": "#/$defs/label" },
+        "detail": { "$ref": "#/$defs/shortText" },
+        "focusIds": { "$ref": "#/$defs/optionalFocusRefs" },
+        "ref": { "$ref": "#/$defs/codeRefWithSnippet" }
+      }
+    },
+    "testItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "detail"],
+      "properties": {
+        "name": {
+          "description": "Clase, archivo o función de test.",
+          "type": "string", "pattern": "\\S", "maxLength": 100
+        },
+        "detail": { "$ref": "#/$defs/shortText" },
+        "cases": { "type": "integer", "minimum": 1, "maximum": 999 },
+        "ref": { "$ref": "#/$defs/codeRef" }
+      }
+    },
+    "teaching": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title", "text"],
+      "properties": {
+        "title": { "$ref": "#/$defs/label" },
+        "text": { "$ref": "#/$defs/text" },
+        "focusIds": { "$ref": "#/$defs/optionalFocusRefs" },
+        "ref": { "$ref": "#/$defs/codeRefWithSnippet" }
       }
     }
   }

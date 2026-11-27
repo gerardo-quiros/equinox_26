@@ -1,12 +1,15 @@
 ---
 name: supervise
-description: Revisa una feature, una rama o un cambio hecho por un agente. Detecta lo que merece criterio humano y genera un mapa interactivo con flashcards, test y escenarios, con evidencias del repositorio. Úsala cuando el usuario pida revisar, supervisar o evaluar una rama, un cambio o el trabajo del agente, o cuando escriba /supervise.
+description: Revisa una feature, una rama o un cambio hecho por un agente. Explica cómo funciona el cambio (fase de estudio), detecta lo que merece criterio humano y genera una página interactiva con mapa del conocimiento, flashcards, test y escenarios, con evidencias del repositorio. Úsala cuando el usuario pida revisar, supervisar o evaluar una rama, un cambio o el trabajo del agente, o cuando escriba /supervise.
 argument-hint: [--base <rama>]
 ---
 
 # Supervise
 
-Ayuda a una persona a revisar lo importante de un cambio sin leerlo entero. Detectas qué merece revisión, lo justificas con evidencias del repositorio y generas un único `review.html` que la persona recorre en el navegador.
+Ayuda a una persona a entender y revisar lo importante de un cambio sin leerlo entero. Generas un único `review.html` con dos fases:
+
+- **El camino del Aprendiz** (estudio): crónica, mapa del conocimiento y enseñanzas del maestro.
+- **El desafío del Maestro** (evaluación): detectas qué merece revisión, lo justificas con evidencias y lo conviertes en flashcards, test y escenarios.
 
 Esta Skill **no aprueba el código**, **no modifica el proyecto** y **no sustituye** a los tests ni a la revisión técnica. Solo ayuda a revisar.
 
@@ -43,7 +46,8 @@ El comando imprime la carpeta de la revisión (la llamaremos `REVIEW`), que es u
 Sigue `<skill>/references/analysis-guide.md`. Debes decidir:
 
 - los **focos**: lo que merece criterio humano, con tipo, prioridad y evidencias;
-- las **flashcards**, las **preguntas de test** y los **escenarios**, todos ligados a focos.
+- las **flashcards**, las **preguntas de test** y los **escenarios**, todos ligados a focos;
+- el **estudio**: crónica, mapa del conocimiento (flujo, componentes, modelos, decisiones, casos límite y pruebas) y enseñanzas. Aprovecha lo que ya has leído: no hace falta otra pasada.
 
 El esquema fija los máximos de cada grupo. Son techos, no objetivos: si el cambio es pequeño, genera menos y no rellenes.
 
@@ -51,7 +55,9 @@ El esquema fija los máximos de cada grupo. Son techos, no objetivos: si el camb
 
 Sigue `<skill>/schema/review.schema.json`. Usa `<skill>/examples/review.example.json` como referencia de formato.
 
-- `meta`: copia `metaDraft` de `context.json` y completa `summary` (1–2 frases). Puedes añadir `missionName`, un nombre corto para la misión (por ejemplo «Valle de la Autenticación»).
+- `schemaVersion`: `"1.1"`.
+- `meta`: copia `metaDraft` de `context.json` tal cual (incluidos `repoUrl` y `published` si vienen) y completa `summary` (1–2 frases). Puedes añadir `missionName`, un nombre corto para la misión (por ejemplo «Valle de la Autenticación»).
+- `study`: según la sección 4 de la guía. Usa `ref` para ubicar cada elemento y `snippet` solo cuando el código se entienda mejor que el texto. No escribas URLs.
 - Si un foco se apoya en la especificación, cítala como evidencia de tipo `spec`.
 - `focuses`, `flashcards`, `quiz` y `scenarios`, con ids F1…, C1…, Q1…, S1….
 - Textos en español, en texto plano. Solo se admiten `código` y **negrita**.
@@ -65,7 +71,7 @@ node <skill>/scripts/build.mjs REVIEW/review.json --repo <raíz del proyecto> --
 El build valida la estructura y comprueba que cada fragmento de evidencia coincide con el archivo. Si falla:
 
 - **Errores de estructura:** corrige `review.json` y vuelve a ejecutar.
-- **Errores de evidencia:** el fragmento no coincide con el archivo. Vuelve a leer el archivo y corrige `lines` o `snippet`. No quites la evidencia para que pase.
+- **Errores de evidencia:** el fragmento no coincide con el archivo. Vuelve a leer el archivo y corrige `lines` o `snippet`. No quites la evidencia para que pase. En `study`, una `ref` con un archivo que no existe se corrige o se quita (no inventes rutas).
 - Como máximo tres intentos. Si sigue fallando, explica al usuario qué falla.
 - **Avisos (⚠):** revísalos (por ejemplo, un foco que ninguna pregunta trabaja).
 
@@ -73,8 +79,9 @@ El build valida la estructura y comprueba que cada fragmento de evidencia coinci
 
 Responde al usuario de forma breve:
 
-- la ruta completa de `REVIEW/review.html`;
+- la ruta completa de `REVIEW/review.html` (se abre en la página de inicio, con los dos caminos);
 - un resumen de 3 a 5 líneas: qué cambia, cuántos focos hay y cuál es el más importante y por qué;
+- si no hay remoto de GitHub o el commit no está publicado, avisa de que los enlaces al código no funcionarán hasta hacer push;
 - los avisos del contexto que importen (sin especificaciones, diff grande, cambios sin commitear que no se incluyen);
 - un recordatorio: al terminar los escenarios, la página copia las respuestas al portapapeles para pegarlas en este chat.
 

@@ -1,0 +1,127 @@
+<!-- Equinox · inicio y «El camino del Aprendiz». Los textos se pintan desde review.study con textContent (study.js). -->
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="eq-flow" viewBox="0 0 24 24"><circle cx="12" cy="4" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="18" r="2.5"/><path d="M12 6.5v5M12 11.5 6 15.5M12 11.5l6 4"/></symbol>
+  <symbol id="eq-components" viewBox="0 0 24 24"><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9L12 3Z"/><path d="m4 7.5 8 4.5 8-4.5M12 12v9"/></symbol>
+  <symbol id="eq-models" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="7" ry="3"/><path d="M5 5v7c0 1.7 3.1 3 7 3s7-1.3 7-3V5M5 12v7c0 1.7 3.1 3 7 3s7-1.3 7-3v-7"/></symbol>
+  <symbol id="eq-decisions" viewBox="0 0 24 24"><path d="M12 21V11M12 11 6 5M12 11l6-6M4 5h4M16 5h4"/></symbol>
+  <symbol id="eq-edgeCases" viewBox="0 0 24 24"><path d="M12 3 21 20H3L12 3Z"/><path d="M12 9v5M12 17v.5"/></symbol>
+  <symbol id="eq-tests" viewBox="0 0 24 24"><path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 1.8 3h10.4A2 2 0 0 0 19 18l-5-9V3M8 15h8"/></symbol>
+</svg>
+
+<!-- Inicio: los dos caminos -->
+<main class="eq-view eq-landing" id="eq-landing">
+  <header class="eq-hero">
+    <p class="eq-eyebrow">Una aventura de conocimiento</p>
+    <h1>Equinox</h1>
+    <p class="eq-subtitle">Cada proyecto es un viaje. Cada respuesta, un paso más.</p>
+    <p class="eq-mission" id="eq-mission"></p>
+  </header>
+
+  <nav class="eq-cards eq-cards-2" aria-label="Elige tu camino">
+    <a class="eq-card" href="#aprendiz" id="eq-go-apprentice">
+      <span class="eq-card-art"><img src="asset:study/camino.webp" alt="El camino del Aprendiz"></span>
+      <span class="eq-card-caption">Entrar en la senda <span aria-hidden="true">→</span></span>
+    </a>
+    <a class="eq-card" href="#desafio">
+      <span class="eq-card-art"><img src="asset:study/desafio.webp" alt="El desafío del Maestro"></span>
+      <span class="eq-card-caption">Poner a prueba tu saber <span aria-hidden="true">→</span></span>
+    </a>
+  </nav>
+
+  <p class="eq-footer"><span aria-hidden="true">✦</span> El conocimiento se forja paso a paso <span aria-hidden="true">✦</span></p>
+</main>
+
+<!-- El camino del Aprendiz -->
+<main class="eq-view eq-apprentice" id="eq-apprentice" hidden>
+  <header class="eq-hero eq-hero-sm">
+    <p class="eq-eyebrow">Primera etapa del viaje</p>
+    <h1>El camino del Aprendiz</h1>
+    <p class="eq-subtitle">Recorre las tres sendas y descubre todo lo que encierra tu proyecto.</p>
+  </header>
+
+  <nav class="eq-cards eq-cards-3" aria-label="Secciones del camino del aprendiz">
+    <button type="button" class="eq-card" data-eq-open="chronicle">
+      <span class="eq-card-art"><img src="asset:study/book.webp" alt="La crónica"></span>
+      <span class="eq-card-caption">Conoce el origen de la misión <span aria-hidden="true">→</span></span>
+    </button>
+    <button type="button" class="eq-card" data-eq-open="map">
+      <span class="eq-card-art"><img src="asset:study/map.webp" alt="El mapa del conocimiento"></span>
+      <span class="eq-card-caption">Explora las piezas del proyecto <span aria-hidden="true">→</span></span>
+    </button>
+    <button type="button" class="eq-card" data-eq-open="teachings">
+      <span class="eq-card-art"><img src="asset:study/teachings.webp" alt="Las enseñanzas del maestro"></span>
+      <span class="eq-card-caption">Descubre las lecciones ocultas <span aria-hidden="true">→</span></span>
+    </button>
+  </nav>
+
+  <a class="eq-back" href="#inicio">← Volver</a>
+</main>
+
+<!-- La crónica -->
+<dialog class="eq-dialog" id="eq-chronicle" aria-labelledby="eq-chronicle-title">
+  <div class="eq-panel eq-chronicle">
+    <button type="button" class="eq-close" data-eq-close aria-label="Cerrar">×</button>
+    <p class="eq-kicker">El camino del Aprendiz</p>
+    <h2 id="eq-chronicle-title"></h2>
+    <p class="eq-justify" id="eq-chronicle-text"></p>
+    <p class="eq-source" id="eq-chronicle-source"></p>
+    <button type="button" class="eq-btn" data-eq-close>Volver al camino</button>
+  </div>
+</dialog>
+
+<!-- El mapa del conocimiento -->
+<dialog class="eq-dialog eq-dialog-wide" id="eq-map" aria-labelledby="eq-map-title">
+  <div class="eq-map-panel">
+    <button type="button" class="eq-close" data-eq-close aria-label="Cerrar">×</button>
+    <div class="eq-map-sidebar">
+      <p class="eq-kicker">Mapa del conocimiento</p>
+      <nav class="eq-map-options" id="eq-map-options" aria-label="Secciones del mapa"></nav>
+    </div>
+    <section class="eq-map-content" id="eq-map-content" aria-live="polite">
+      <div class="eq-map-empty">
+        <span aria-hidden="true">✦</span>
+        <h2 id="eq-map-title">Elige una sección</h2>
+        <p>Selecciona una pieza del mapa para descubrir sus conocimientos.</p>
+      </div>
+    </section>
+  </div>
+</dialog>
+
+<!-- Las enseñanzas del maestro -->
+<dialog class="eq-dialog eq-dialog-mid" id="eq-teachings" aria-labelledby="eq-teaching-title">
+  <div class="eq-teaching-panel">
+    <button type="button" class="eq-close" data-eq-close aria-label="Cerrar">×</button>
+    <div class="eq-teaching-image"><img id="eq-teaching-img" alt="El maestro"></div>
+    <div class="eq-teaching-copy">
+      <p class="eq-teaching-eyebrow" id="eq-teaching-eyebrow"></p>
+      <h2 id="eq-teaching-title"></h2>
+      <p class="eq-justify" id="eq-teaching-text"></p>
+      <div id="eq-teaching-ref"></div>
+      <div class="eq-teaching-nav">
+        <button type="button" class="eq-btn eq-btn-ghost" id="eq-teaching-prev"><span aria-hidden="true">←</span> Anterior</button>
+        <span id="eq-teaching-count" aria-live="polite"></span>
+        <button type="button" class="eq-btn" id="eq-teaching-next">Siguiente <span aria-hidden="true">→</span></button>
+      </div>
+    </div>
+  </div>
+</dialog>
+
+<!-- Imágenes del maestro: se elige una al azar en cada enseñanza -->
+<template id="eq-master-images">
+  <img src="asset:study/maestro1.webp" alt="">
+  <img src="asset:study/maestro2.webp" alt="">
+  <img src="asset:study/maestro3.webp" alt="">
+</template>
+
+<!-- Piezas que study.js clona -->
+<template id="eq-tpl-ref">
+  <div class="eq-ref">
+    <div class="eq-ref-head">
+      <a class="eq-ref-link" data-slot="link" target="_blank" rel="noopener noreferrer"></a>
+      <span class="eq-ref-path" data-slot="path"></span>
+      <button type="button" class="eq-ref-toggle" data-slot="toggle" aria-expanded="false">▸ Ver código</button>
+    </div>
+    <div class="eq-code" data-slot="code" hidden></div>
+  </div>
+</template>

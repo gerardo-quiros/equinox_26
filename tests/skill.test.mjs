@@ -38,6 +38,13 @@ test('la Skill no pide ni inventa normas externas en sus instrucciones', () => {
   assert.match(read('references/analysis-guide.md'), /No inventes normas/);
 });
 
+test('la guía de análisis cubre todas las partes del bloque study', () => {
+  const guide = read('references/analysis-guide.md');
+  for (const part of ['chronicle', 'map.flow', 'map.components', 'map.models', 'map.decisions', 'map.edgeCases', 'map.tests', 'teachings', 'snippet', 'No escribas URLs']) {
+    assert.ok(guide.includes(part), `falta ${part}`);
+  }
+});
+
 test('la guía de análisis cubre los cinco tipos de foco del esquema', () => {
   const guide = read('references/analysis-guide.md');
   for (const type of ['requirement-gap', 'decision', 'risk', 'change', 'test-gap']) {
